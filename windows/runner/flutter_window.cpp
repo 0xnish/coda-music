@@ -21,11 +21,7 @@ void HandleMethodCall(const flutter::MethodCall<flutter::EncodableValue>& call,
   } else if (call.method_name() == "maximize") {
     HWND hwnd = g_flutter_controller ? GetAncestor(g_flutter_controller->view()->GetNativeWindow(), GA_ROOT) : nullptr;
     if (hwnd) {
-      if (IsZoomed(hwnd)) {
-        ShowWindow(hwnd, SW_RESTORE);
-      } else {
-        ShowWindow(hwnd, SW_MAXIMIZE);
-      }
+      ShowWindow(hwnd, SW_MAXIMIZE);
     }
     result->Success();
   } else if (call.method_name() == "close") {
@@ -72,7 +68,7 @@ bool FlutterWindow::OnCreate() {
   channel_->SetMethodCallHandler(HandleMethodCall);
 
   // Extend frame for window shadow
-  MARGINS margins = {0, 0, 1, 0};
+  MARGINS margins = {0, 0, 0, 0};
   DwmExtendFrameIntoClientArea(GetHandle(), &margins);
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {

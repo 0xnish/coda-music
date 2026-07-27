@@ -19,7 +19,7 @@ class HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => HomeCubit(sl())..fetch(),
+      create: (_) => HomeCubit(sl()),
       child: _HomePage(),
     );
   }
@@ -47,6 +47,9 @@ class _HomePageState extends State<_HomePage> {
     );
     _scrollController.addListener(_scrollListener);
     _checkFirstLaunch();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<HomeCubit>().fetch();
+    });
   }
 
   @override
@@ -130,7 +133,9 @@ class _HomePageState extends State<_HomePage> {
                 HomeError() => Center(
                     child: Text(state.message ?? ''),
                   ),
-                HomeSuccess() => SingleChildScrollView(
+                HomeSuccess() => ScrollConfiguration(
+                    behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                    child: SingleChildScrollView(
                     physics: const ClampingScrollPhysics(),
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     controller: _scrollController,
@@ -154,7 +159,7 @@ class _HomePageState extends State<_HomePage> {
                           ],
                         ),
                       ],
-                    )),
+                    ))),
                   ),
               };
             },

@@ -292,12 +292,7 @@ class _PlayerPageState extends State<PlayerPage> {
                                                                   ),
                                                                   child: GestureDetector(
                                                                     onTap: () {
-                                                                      final player = GetIt.I<MediaPlayer>().player;
-                                                                      if (player.playing) {
-                                                                        player.pause();
-                                                                      } else {
-                                                                        player.play();
-                                                                      }
+                                                                      GetIt.I<MediaPlayer>().togglePlay();
                                                                     },
                                                                     child: ClipRRect(
                                                                       borderRadius:
@@ -379,12 +374,7 @@ class _PlayerPageState extends State<PlayerPage> {
                                               ),
                                               child: GestureDetector(
                                                 onTap: () {
-                                                  final player = GetIt.I<MediaPlayer>().player;
-                                                  if (player.playing) {
-                                                    player.pause();
-                                                  } else {
-                                                    player.play();
-                                                  }
+                                                  GetIt.I<MediaPlayer>().togglePlay();
                                                 },
                                                 child: ClipRRect(
                                                   borderRadius:
@@ -595,9 +585,7 @@ class _PlayerPageState extends State<PlayerPage> {
                   }
                   return IconButton(
                     onPressed: () {
-                      value == ButtonState.playing
-                          ? mediaPlayer.player.pause()
-                          : mediaPlayer.player.play();
+                      mediaPlayer.togglePlay();
                     },
                     icon: Icon(
                       value == ButtonState.playing

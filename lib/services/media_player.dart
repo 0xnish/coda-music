@@ -223,8 +223,12 @@ class MediaPlayer extends ChangeNotifier {
     _player.playbackEventStream.listen(
       (event) {},
       onError: (Object e, StackTrace st) {
-        _buttonState.value = ButtonState.paused;
-        notifyListeners();
+        debugPrint('Playback error: $e');
+        if (_player.processingState != ProcessingState.buffering &&
+            _player.processingState != ProcessingState.loading) {
+          _buttonState.value = ButtonState.paused;
+          notifyListeners();
+        }
       },
     );
   }
@@ -419,12 +423,14 @@ class MediaPlayer extends ChangeNotifier {
       await _player.play();
 
     } catch (e) {
+      debugPrint('playSong playback error for ${song['videoId']}: $e');
       if (_lastPlayRequestId == requestId) {
         _buttonState.value = ButtonState.paused;
         notifyListeners();
       }
     }
   }
+
 
   Future<void> playNext(Map<String, dynamic> mediaItem) async {
     final currentSong = _currentSongNotifier.value;
@@ -818,6 +824,36 @@ class MediaPlayer extends ChangeNotifier {
     } catch (e) {
       debugPrint('Failed to restore queue order: $e');
     }
+  }
+
+  Future<void> togglePlay() async {
+    if (_player.playing) {
+      _player.pause();
+      return;
+    }
+
+    final state = _player.processingState;
+
+    if (state == ProcessingState.idle) {
+      final song = _currentSongNotifier.value;
+      if (song != null && song.extras != null) {
+        await playSong(song.extras!);
+      }
+      return;
+    }
+
+    if (state == ProcessingState.completed) {
+      await _player.seek(Duration.zero);
+      await _player.play();
+      return;
+    }
+
+    if (state == ProcessingState.loading || state == ProcessingState.buffering) {
+      await _player.play();
+      return;
+    }
+
+    await _player.play();
   }
 
 }

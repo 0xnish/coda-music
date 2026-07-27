@@ -50,28 +50,16 @@ void main() async {
 
   final GlobalKey<NavigatorState> panelKey = GlobalKey<NavigatorState>();
 
-  await FileStorage.initialise();
-  FileStorage fileStorage = FileStorage();
   SettingsManager settingsManager = SettingsManager();
+  MediaPlayer mediaPlayer = MediaPlayer();
 
   GetIt.I.registerSingleton<SettingsManager>(settingsManager);
-
-  final String audioStreamUrl = await createAudioStreamServer();
-  GetIt.I.registerSingleton<String>(audioStreamUrl,
-      instanceName: 'audioStreamUrl');
-
-  MediaPlayer mediaPlayer = MediaPlayer();
   GetIt.I.registerSingleton<MediaPlayer>(mediaPlayer);
-  EqualizerService equalizerService = EqualizerService();
-  GetIt.I.registerSingleton<EqualizerService>(equalizerService);
-  LibraryService libraryService = LibraryService();
+  GetIt.I.registerSingleton<EqualizerService>(EqualizerService());
+  GetIt.I.registerSingleton<LibraryService>(LibraryService());
   GetIt.I.registerSingleton<DownloadManager>(DownloadManager());
   GetIt.I.registerSingleton(panelKey);
   GetIt.I.registerSingleton<YTMusic>(ytMusic);
-
-  GetIt.I.registerSingleton<FileStorage>(fileStorage);
-
-  GetIt.I.registerSingleton<LibraryService>(libraryService);
   GetIt.I.registerSingleton<LyricsService>(LyricsService());
 
   runApp(
@@ -79,17 +67,26 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => settingsManager),
         ChangeNotifierProvider(create: (_) => mediaPlayer),
-        ChangeNotifierProvider(create: (_) => libraryService),
+        ChangeNotifierProvider(create: (_) => GetIt.I<LibraryService>()),
       ],
       child: const Coda(),
     ),
   );
 
+  _initialiseHeavyServices();
+}
+
+Future<void> _initialiseHeavyServices() async {
   if (Platform.isWindows) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      WindowService.maximize();
-    });
+    WindowService.maximize();
   }
+
+  await FileStorage.initialise();
+  GetIt.I.registerSingleton<FileStorage>(FileStorage());
+
+  final audioStreamUrl = await createAudioStreamServer();
+  GetIt.I.registerSingleton<String>(audioStreamUrl,
+      instanceName: 'audioStreamUrl');
 }
 
 class Coda extends StatelessWidget {

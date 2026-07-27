@@ -122,10 +122,7 @@ class _BottomPlayerState extends State<BottomPlayer> {
                                   builder: (context, buttonState, _) {
                                     return AdaptiveIconButton(
                                       onPressed: () {
-                                        final player = GetIt.I<MediaPlayer>();
-                                        player.player.playing
-                                            ? player.player.pause()
-                                            : player.player.play();
+                                        GetIt.I<MediaPlayer>().togglePlay();
                                       },
                                       icon: buttonState == ButtonState.loading
                                        ? const SizedBox(

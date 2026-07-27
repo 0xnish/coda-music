@@ -18,6 +18,8 @@ class _AnimatedCodaTitleState extends State<AnimatedCodaTitle>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   static const _text = 'CODA MUSIC';
+  late final List<int> _letterIndices;
+  late final List<Widget> _cachedWidgets;
 
   @override
   void initState() {
@@ -26,6 +28,38 @@ class _AnimatedCodaTitleState extends State<AnimatedCodaTitle>
       vsync: this,
       duration: const Duration(milliseconds: 2000),
     )..repeat();
+    _letterIndices = [];
+    for (int i = 0; i < _text.length; i++) {
+      if (_text[i] != ' ') {
+        _letterIndices.add(i);
+      }
+    }
+    _buildCache();
+  }
+
+  @override
+  void didUpdateWidget(AnimatedCodaTitle oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.fontSize != widget.fontSize ||
+        oldWidget.letterSpacing != widget.letterSpacing) {
+      _buildCache();
+    }
+  }
+
+  void _buildCache() {
+    final textStyle = TextStyle(
+      color: Colors.white,
+      fontSize: widget.fontSize,
+      fontWeight: FontWeight.bold,
+      letterSpacing: widget.letterSpacing,
+    );
+    _cachedWidgets = List.generate(_text.length, (index) {
+      final char = _text[index];
+      if (char == ' ') {
+        return SizedBox(width: widget.fontSize * 0.35);
+      }
+      return Text(char, style: textStyle);
+    });
   }
 
   @override
@@ -36,31 +70,22 @@ class _AnimatedCodaTitleState extends State<AnimatedCodaTitle>
 
   @override
   Widget build(BuildContext context) {
+    final totalLetters = _letterIndices.length;
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: List.generate(_text.length, (index) {
-            final char = _text[index];
-            if (char == ' ') {
-              return SizedBox(width: widget.fontSize * 0.35);
+            if (_text[index] == ' ') {
+              return _cachedWidgets[index];
             }
-            final totalLetters = _text.replaceAll(' ', '').length;
             final offset = index / totalLetters;
             final value = (_controller.value - offset) % 1.0;
             final scale = 1.0 + 0.3 * (1.0 - (value * 2 - 1).abs());
             return Transform.scale(
               scale: scale,
-              child: Text(
-                char,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: widget.fontSize,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: widget.letterSpacing,
-                ),
-              ),
+              child: _cachedWidgets[index],
             );
           }),
         );
