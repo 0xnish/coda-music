@@ -1,11 +1,11 @@
 [Setup]
 AppName=CODA MUSIC
-AppVersion=2.3.0
+AppVersion=2.4.0
 AppPublisher=Nishanth JP
 DefaultDirName={autopf}\CODA MUSIC
 DefaultGroupName=CODA MUSIC
 OutputDir=..\release
-OutputBaseFilename=Coda Music v2.3.0 Setup
+OutputBaseFilename=Coda Music v2.4.0 Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
