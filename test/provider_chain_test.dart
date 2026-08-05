@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
@@ -7,11 +6,17 @@ import 'package:http/http.dart' as http;
 void main() {
   test('Simulate app: LRCLIB direct GET with null duration (should be skipped)', () async {
     // Simulating duration being null (common case on first load)
-    String? title = 'Dai Dai';
-    String? artist = 'Shakira,Burna Boy';
-    String? album = 'Dai Dai';
-    String? duration = null; // null like in app
-  
+    final song = <String, dynamic>{
+      'title': 'Dai Dai',
+      'artist': 'Shakira,Burna Boy',
+      'album': 'Dai Dai',
+      // 'duration' absent — null like in app
+    };
+    String? title = song['title'] as String?;
+    String? artist = song['artist'] as String?;
+    String? album = song['album'] as String?;
+    String? duration = song['duration'] as String?;
+
     if (artist != null && album != null && duration != null && duration != 'null') {
       final uri = Uri.https('lrclib.net', 'api/get', {
         'track_name': title!,

@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 import 'package:Coda/services/equalizer_service.dart';
 import 'package:Coda/services/yt_audio_stream.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:rxdart/rxdart.dart';
@@ -534,34 +533,6 @@ class MediaPlayer extends ChangeNotifier {
     }
   }
 
-  Future<void> _addRemainingToPlaylist(List songs, int playedIndex) async {
-    try {
-      final remaining = <Map<String, dynamic>>[];
-      for (int i = playedIndex + 1; i < songs.length; i++) {
-        remaining.add(Map<String, dynamic>.from(songs[i]));
-      }
-
-      if (_shuffleModeEnabled) {
-        remaining.shuffle();
-      }
-
-      final sources = await Future.wait(remaining.map((song) async {
-        try {
-          return await _getAudioSource(song);
-        } catch (_) {
-          return null;
-        }
-      }));
-
-      final validSources = sources.whereType<AudioSource>().toList();
-      if (validSources.isNotEmpty) {
-        await _player.addAudioSources(validSources);
-      }
-    } catch (e) {
-      debugPrint('Failed to add queue sources: $e');
-    }
-  }
-
   Future<void> preloadSongs(List songs) async {
     for (int i = 0; i < songs.length && i < 5; i++) {
       final s = Map<String, dynamic>.from(songs[i]);
@@ -730,7 +701,7 @@ class MediaPlayer extends ChangeNotifier {
       if (currentIndex == null) return;
       final currentPosition = _player.position;
 
-      final allSources = List<IndexedAudioSource>.from(_player.sequence ?? []);
+      final allSources = List<IndexedAudioSource>.from(_player.sequence);
       if (allSources.isEmpty || currentIndex + 1 >= allSources.length) return;
 
       final beforeSources = allSources.sublist(0, currentIndex);
@@ -783,7 +754,7 @@ class MediaPlayer extends ChangeNotifier {
       if (currentSong == null) return;
       final currentPosition = _player.position;
 
-      final allSources = List<IndexedAudioSource>.from(_player.sequence ?? []);
+      final allSources = List<IndexedAudioSource>.from(_player.sequence);
 
       final sourceMap = <String, IndexedAudioSource>{};
       for (var source in allSources) {

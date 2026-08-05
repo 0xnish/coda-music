@@ -260,7 +260,6 @@ class _LibraryGridCard extends StatelessWidget {
       builder: (_, importingKey, child) {
         if (importingKey == null || importingKey != playlistKey) return child!;
 
-        final colorScheme = Theme.of(context).colorScheme;
         return Stack(
           children: [
             child!,

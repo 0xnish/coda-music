@@ -37,36 +37,6 @@ class _SupportPageState extends State<SupportPage> {
       body: SafeArea(
         child: Stack(
           children: [
-            Positioned(
-              top: 60,
-              left: 20,
-              child: Icon(Icons.favorite, size: 14, color: Colors.white.withValues(alpha: 0.15)),
-            ),
-            Positioned(
-              top: 100,
-              right: 30,
-              child: Icon(Icons.favorite, size: 20, color: Colors.white.withValues(alpha: 0.1)),
-            ),
-            Positioned(
-              bottom: 120,
-              left: 40,
-              child: Icon(Icons.favorite, size: 16, color: Colors.white.withValues(alpha: 0.12)),
-            ),
-            Positioned(
-              bottom: 80,
-              right: 50,
-              child: Icon(Icons.favorite, size: 12, color: Colors.white.withValues(alpha: 0.18)),
-            ),
-            Positioned(
-              top: 200,
-              left: 10,
-              child: Icon(Icons.favorite, size: 10, color: Colors.white.withValues(alpha: 0.1)),
-            ),
-            Positioned(
-              top: 150,
-              right: 15,
-              child: Icon(Icons.favorite, size: 18, color: Colors.white.withValues(alpha: 0.12)),
-            ),
             Center(
               child: SingleChildScrollView(
             controller: _scrollController,
@@ -154,7 +124,7 @@ class _SupportCard extends StatefulWidget {
 class _SupportCardState extends State<_SupportCard>
     with TickerProviderStateMixin {
   bool _hovered = false;
-  List<_HeartParticle> _particles = [];
+  final List<_HeartParticle> _particles = [];
   late Ticker _particleTicker;
 
   @override
@@ -326,7 +296,7 @@ class _HeartParticle {
   double size;
   double vx;
   double vy;
-  double life;
+  double life = 0;
   double rotation;
   double rotationSpeed;
   double baseAlpha;
@@ -337,7 +307,6 @@ class _HeartParticle {
     required this.size,
     required this.vx,
     required this.vy,
-    this.life = 0,
     this.rotation = 0,
     this.rotationSpeed = 0,
     this.baseAlpha = 1.0,

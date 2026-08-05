@@ -37,7 +37,6 @@ Future<Lyrics?> getLyricaLyrics({
 
     final lyricsSynced = data['lyrics'] as String?;
     final lyricsPlain = data['lyrics'] as String? ?? '';
-    final source = data['source'] as String? ?? 'lyrica';
 
     final isLrc = lyricsSynced != null &&
         lyricsSynced.contains(RegExp(r'\[\d+:\d+[\.:]\d+\]'));

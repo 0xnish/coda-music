@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' show parse;
-import 'package:html/dom.dart';
 import 'package:Coda/services/chart_model.dart';
 
 class ChartsService {

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -36,17 +34,6 @@ class _AppShellState extends State<AppShell> {
 
   bool _handleKeyEvent(KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
-
-    final isTextField = !HardwareKeyboard.instance.physicalKeysPressed
-        .where((k) => k != PhysicalKeyboardKey.shiftLeft &&
-            k != PhysicalKeyboardKey.shiftRight &&
-            k != PhysicalKeyboardKey.controlLeft &&
-            k != PhysicalKeyboardKey.controlRight &&
-            k != PhysicalKeyboardKey.altLeft &&
-            k != PhysicalKeyboardKey.altRight &&
-            k != PhysicalKeyboardKey.metaLeft &&
-            k != PhysicalKeyboardKey.metaRight)
-        .any((k) => false);
 
     final focusNode = FocusManager.instance.primaryFocus;
     final hasPrimaryFocus = focusNode?.hasPrimaryFocus ?? true;

@@ -6,7 +6,6 @@ import 'package:scroll_animator/scroll_animator.dart';
 
 import '../../../../generated/l10n.dart';
 import '../../../../utils/bottom_modals.dart';
-import '../../../../utils/adaptive_widgets/adaptive_widgets.dart';
 import '../widgets/library_tile.dart';
 import '../widgets/my_playlist_header.dart';
 import 'cubit/favourites_cubit.dart';

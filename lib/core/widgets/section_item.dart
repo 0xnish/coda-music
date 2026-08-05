@@ -265,9 +265,9 @@ class _SectionItemState extends State<SectionItem> {
 }
 
 class SongList extends StatefulWidget {
-  SongList({required this.songs, required this.controller, super.key});
+  const SongList({required this.songs, required this.controller, super.key});
   final List songs;
-  PageController controller;
+  final PageController controller;
 
   @override
   State<SongList> createState() => _SongListState();

@@ -16,7 +16,7 @@ class HomeCubit extends Cubit<HomeState> {
   Map<String, dynamic> _params() {
     final box = Hive.box('SONG_HISTORY');
     final historySongs = box.values
-        .where((s) => s is Map && (s as Map)['videoId'] != null)
+        .where((s) => s is Map && s['videoId'] != null)
         .map((s) => Map<String, dynamic>.from(s as Map))
         .toList();
     return {
@@ -52,8 +52,7 @@ class HomeCubit extends Cubit<HomeState> {
     if (speedDial != null) sections.add(speedDial);
 
     final quickPicksIdx = ytSections.indexWhere(
-      (s) => s is Map &&
-          s['title'] is String &&
+      (s) => s['title'] is String &&
           (s['title'] as String).toLowerCase().contains('quick'),
     );
     if (quickPicksIdx >= 0) {
@@ -95,7 +94,7 @@ class HomeCubit extends Cubit<HomeState> {
     try {
       final box = Hive.box('SONG_HISTORY');
       final allSongs = box.values
-          .where((s) => s is Map && (s as Map)['videoId'] != null)
+          .where((s) => s is Map && s['videoId'] != null)
           .map((s) => Map<String, dynamic>.from(s as Map))
           .toList();
       if (allSongs.isEmpty) return null;
