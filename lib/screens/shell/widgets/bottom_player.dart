@@ -17,6 +17,7 @@ class BottomPlayer extends StatefulWidget {
 
 class _BottomPlayerState extends State<BottomPlayer> {
   Color? backgroundColor;
+  int? _dragMs;
 
   void updateBackgroundColor(ImageProvider image) async {
     final palette = await PaletteGenerator.fromImageProvider(
@@ -172,10 +173,19 @@ class _BottomPlayerState extends State<BottomPlayer> {
                                     overlayColor: Colors.white.withOpacity(0.1),
                                   ),
                                   child: Slider(
-                                    value: totalMs > 0 ? currentMs.toDouble().clamp(0.0, totalMs.toDouble()) : 0,
+                                    value: totalMs > 0
+                                        ? (_dragMs ?? currentMs)
+                                            .toDouble()
+                                            .clamp(0.0, totalMs.toDouble())
+                                        : 0,
                                     max: totalMs > 0 ? totalMs.toDouble() : 1,
                                     onChanged: (v) {
-                                      mediaPlayer.player.seek(Duration(milliseconds: v.round()));
+                                      setState(() => _dragMs = v.round());
+                                    },
+                                    onChangeEnd: (v) {
+                                      mediaPlayer.player.seek(
+                                          Duration(milliseconds: v.round()));
+                                      setState(() => _dragMs = null);
                                     },
                                   ),
                                 ),

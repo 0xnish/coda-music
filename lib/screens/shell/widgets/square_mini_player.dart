@@ -13,6 +13,8 @@ class SquareMiniPlayer extends StatefulWidget {
 }
 
 class _SquareMiniPlayerState extends State<SquareMiniPlayer> {
+  int? _dragMs;
+
   @override
   Widget build(BuildContext context) {
     final mediaPlayer = GetIt.I<MediaPlayer>();
@@ -130,13 +132,18 @@ class _SquareMiniPlayerState extends State<SquareMiniPlayer> {
                           ),
                           child: Slider(
                             value: totalMs > 0
-                                ? currentMs.toDouble()
+                                ? (_dragMs ?? currentMs)
+                                    .toDouble()
                                     .clamp(0.0, totalMs.toDouble())
                                 : 0,
                             max: totalMs > 0 ? totalMs.toDouble() : 1,
                             onChanged: (v) {
+                              setState(() => _dragMs = v.round());
+                            },
+                            onChangeEnd: (v) {
                               mediaPlayer.player.seek(
                                   Duration(milliseconds: v.round()));
+                              setState(() => _dragMs = null);
                             },
                           ),
                         ),
