@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 import 'package:Coda/services/equalizer_service.dart';
+import 'package:Coda/services/innertube_player.dart';
 import 'package:Coda/services/yt_audio_stream.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
@@ -16,9 +17,10 @@ import 'settings_manager.dart';
 class MediaPlayer extends ChangeNotifier {
   late final AudioPlayer _player;
 
+  // The queue in its ORIGINAL order (never reordered for shuffle, like
+  // Metrolist's timeline). Shuffle is only an index permutation on top of it.
   List<IndexedAudioSource> _songList = [];
-  List<Map<String, dynamic>> _originalPlaylist = [];
-  final Map<String, AudioSource> _sourceCache = {};
+  final Map<String, IndexedAudioSource> _sourceCache = {};
   final ValueNotifier<MediaItem?> _currentSongNotifier = ValueNotifier(null);
   final ValueNotifier<int?> _currentIndex = ValueNotifier(null);
   final ValueNotifier<ButtonState> _buttonState =
@@ -31,15 +33,34 @@ class MediaPlayer extends ChangeNotifier {
   final ValueNotifier<ProgressBarState> _progressBarState =
       ValueNotifier(ProgressBarState());
 
+  // Metrolist-style shuffle: a permutation of indices with the current song
+  // first. Empty when shuffle is disabled. The queue itself is never touched.
   bool _shuffleModeEnabled = false;
+  List<int> _shuffleOrder = [];
 
   bool autoFetching = false;
 
+  double _playbackSpeed = 1.0;
+  double _pitch = 1.0;
+
   Timer? _loadingTimeoutTimer;
   int _loadingRetryCount = 0;
-  static const Duration _loadingTimeout = Duration(seconds: 15);
+  static const Duration _loadingTimeout = Duration(seconds: 30);
+  static const int _maxLoadingRetries = 8;
   String? _lastFailedVideoId;
+  bool _retryPending = false;
+  bool _isRetrying = false;
 
+  final BehaviorSubject<List<IndexedAudioSource>> _sequenceSubject =
+      BehaviorSubject.seeded([]);
+  final BehaviorSubject<int?> _indexSubject = BehaviorSubject.seeded(null);
+
+  Future<void> _switchOp = Future.value();
+
+  bool _handlingCompletion = false;
+  String? _lastCompletionSongId;
+  DateTime? _lastCompletionTime;
+  static const Duration _completionDebounce = Duration(seconds: 2);
 
   MediaPlayer() {
     _player = AudioPlayer();
@@ -55,6 +76,30 @@ class MediaPlayer extends ChangeNotifier {
   bool get shuffleModeEnabled => _shuffleModeEnabled;
   ValueNotifier<LoopMode> get loopMode => _loopMode;
   ValueNotifier<Duration?> get timerDuration => _timerDuration;
+  double get playbackSpeed => _playbackSpeed;
+  double get pitch => _pitch;
+
+  List<int> get _effectiveIndices =>
+      (_shuffleModeEnabled && _shuffleOrder.length == _songList.length)
+          ? _shuffleOrder
+          : List.generate(_songList.length, (i) => i);
+
+  List<IndexedAudioSource> get displayQueue {
+    if (_shuffleModeEnabled && _shuffleOrder.length == _songList.length) {
+      return [for (final i in _shuffleOrder) _songList[i]];
+    }
+    return _songList;
+  }
+
+  int? get displayCurrentIndex {
+    final cur = _currentIndex.value;
+    if (cur == null || cur < 0 || cur >= _songList.length) return null;
+    if (_shuffleModeEnabled && _shuffleOrder.length == _songList.length) {
+      final d = _shuffleOrder.indexOf(cur);
+      return d < 0 ? null : d;
+    }
+    return cur;
+  }
 
   Stream<
       ({
@@ -62,19 +107,18 @@ class MediaPlayer extends ChangeNotifier {
         int? currentIndex,
         MediaItem? currentItem
       })> get currentTrackStream => Rx.combineLatest2<
-          List<IndexedAudioSource>?,
+          List<IndexedAudioSource>,
           int?,
           ({
             List<IndexedAudioSource>? sequence,
             int? currentIndex,
             MediaItem? currentItem
           })>(
-        _player.sequenceStream,
-        _player.currentIndexStream,
+        _sequenceSubject.stream,
+        _indexSubject.stream,
         (sequence, currentIndex) {
           MediaItem? currentItem;
-          if (sequence != null &&
-              currentIndex != null &&
+          if (currentIndex != null &&
               currentIndex >= 0 &&
               currentIndex < sequence.length) {
             final tag = sequence[currentIndex].tag;
@@ -89,18 +133,41 @@ class MediaPlayer extends ChangeNotifier {
       );
 
   Future<void> _init() async {
-    _listenToChangesInPlaylist();
+    _player.setLoopMode(LoopMode.off);
     _listenToPlaybackState();
     _listenToCurrentPosition();
     _listenToBufferedPosition();
     _listenToTotalDuration();
-    _listenToChangesInSong();
-    _listenToShuffle();
     _listenToAutofetch();
     _listenToPlayerErrors();
-
   }
 
+  void _emit() {
+    final index = _currentIndex.value;
+    MediaItem? current;
+    if (index != null && index >= 0 && index < _songList.length) {
+      final tag = _songList[index].tag;
+      if (tag is MediaItem) current = tag;
+    }
+    _currentSongNotifier.value = current;
+    _sequenceSubject.add(displayQueue);
+    _indexSubject.add(displayCurrentIndex);
+    notifyListeners();
+  }
+
+  void _syncIndex(int? index) {
+    _currentIndex.value = index;
+    _emit();
+  }
+
+  void _addHistoryForCurrent() {
+    final index = _currentIndex.value;
+    if (index == null || index < 0 || index >= _songList.length) return;
+    final tag = _songList[index].tag;
+    if (tag is MediaItem && tag.extras != null) {
+      addHistory(tag.extras!);
+    }
+  }
 
   void _startLoadingTimeout(String videoId) {
     _loadingTimeoutTimer?.cancel();
@@ -114,25 +181,50 @@ class MediaPlayer extends ChangeNotifier {
     _loadingTimeoutTimer = null;
   }
 
-  void _handleLoadingTimeout(String videoId) async {
-    _loadingRetryCount++;
-    _lastFailedVideoId = videoId;
+  void _handleLoadingTimeout(String videoId) {
+    _retryPending = false;
+    _retryPlayback(videoId);
+  }
 
-    debugPrint('Loading timeout: retrying playback for $videoId (attempt $_loadingRetryCount)');
-    _sourceCache.remove(videoId);
-
-    final currentSong = _currentSongNotifier.value;
-    if (currentSong == null || currentSong.id != videoId) {
-      _loadingRetryCount = 0;
-      return;
-    }
-    final songData = currentSong.extras;
-    if (songData == null) {
-      _loadingRetryCount = 0;
-      return;
-    }
-
+  Future<void> _retryPlayback(String videoId) async {
+    if (_isRetrying) return;
+    _isRetrying = true;
     try {
+      if (_loadingRetryCount >= _maxLoadingRetries) {
+        debugPrint(
+            'Giving up auto-retry for $videoId after $_loadingRetryCount attempts');
+        _retryPending = false;
+        _loadingRetryCount = 0;
+        _lastFailedVideoId = null;
+        _cancelLoadingTimeout();
+        _buttonState.value = ButtonState.paused;
+        notifyListeners();
+        return;
+      }
+
+      _loadingRetryCount++;
+      _lastFailedVideoId = videoId;
+      _cancelLoadingTimeout();
+
+      final currentSong = _currentSongNotifier.value;
+      if (currentSong == null || currentSong.id != videoId) {
+        _loadingRetryCount = 0;
+        return;
+      }
+      final songData = currentSong.extras;
+      if (songData == null) {
+        _loadingRetryCount = 0;
+        return;
+      }
+
+      debugPrint(
+          'Retrying playback for $videoId (attempt $_loadingRetryCount)');
+      _sourceCache.remove(videoId);
+      InnertubePlayer.instance.removeFromCache(videoId);
+
+      _buttonState.value = ButtonState.loading;
+      notifyListeners();
+
       await _player.stop();
       await _player.clearAudioSources();
 
@@ -140,42 +232,15 @@ class MediaPlayer extends ChangeNotifier {
       await _player.setAudioSource(source);
       await _player.play();
 
+      _retryPending = true;
       _startLoadingTimeout(videoId);
     } catch (e) {
-      debugPrint('Loading timeout retry failed: $e');
+      debugPrint('Playback retry failed: $e');
+      _retryPending = true;
       _startLoadingTimeout(videoId);
+    } finally {
+      _isRetrying = false;
     }
-  }
-
-  void _listenToChangesInPlaylist() {
-    _player.sequenceStream.listen((playlist) {
-      final List<IndexedAudioSource> newList =
-          (playlist).cast<IndexedAudioSource>();
-
-      if (listEquals(newList, _songList)) return;
-
-      final bool shouldAdd = (_songList.isEmpty && newList.isNotEmpty);
-
-      if (newList.isEmpty) {
-        _currentSongNotifier.value = null;
-        _currentIndex.value = null;
-        _songList = [];
-      } else {
-        _songList = newList;
-
-        _currentIndex.value ??= 0;
-        _currentSongNotifier.value =
-            (_songList.length > (_currentIndex.value ?? 0))
-                ? _songList[_currentIndex.value ?? 0].tag
-                : null;
-      }
-
-      if (shouldAdd == true && _currentSongNotifier.value != null) {
-        addHistory(_currentSongNotifier.value!.extras!);
-      }
-
-      notifyListeners();
-    });
   }
 
   void _listenToPlaybackState() {
@@ -193,9 +258,11 @@ class MediaPlayer extends ChangeNotifier {
           _lastFailedVideoId = null;
         }
         if (currentVideoId != null) {
+          _retryPending = true;
           _startLoadingTimeout(currentVideoId);
         }
       } else if (processingState == ProcessingState.ready) {
+        _retryPending = false;
         _cancelLoadingTimeout();
         _loadingRetryCount = 0;
         _lastFailedVideoId = null;
@@ -205,17 +272,50 @@ class MediaPlayer extends ChangeNotifier {
           GetIt.I<EqualizerService>().applyEqualizer();
         }
       } else if (processingState == ProcessingState.completed) {
+        _retryPending = false;
         _cancelLoadingTimeout();
         _loadingRetryCount = 0;
         _lastFailedVideoId = null;
-        _player.seek(Duration.zero);
-        _player.pause();
-        _buttonState.value = ButtonState.paused;
+        _handleSongCompleted();
       } else {
-        _cancelLoadingTimeout();
-        _buttonState.value = ButtonState.paused;
+        if (!_retryPending) {
+          _cancelLoadingTimeout();
+          _buttonState.value = ButtonState.paused;
+        } else {
+          _buttonState.value = ButtonState.loading;
+        }
       }
     });
+  }
+
+  Future<void> _handleSongCompleted() async {
+    final songId = _currentSongNotifier.value?.id;
+    final now = DateTime.now();
+    if (_handlingCompletion) return;
+    if (_lastCompletionSongId == songId &&
+        _lastCompletionTime != null &&
+        now.difference(_lastCompletionTime!) < _completionDebounce) {
+      return;
+    }
+    _handlingCompletion = true;
+    _lastCompletionSongId = songId;
+    _lastCompletionTime = now;
+    try {
+      await _onSongCompleted();
+    } catch (e) {
+      debugPrint('_onSongCompleted error: $e');
+    } finally {
+      _handlingCompletion = false;
+    }
+  }
+
+  Future<void> _onSongCompleted() async {
+    if (_loopMode.value == LoopMode.one) {
+      await _player.seek(Duration.zero);
+      await _player.play();
+      return;
+    }
+    await _next(afterCompletion: true);
   }
 
   void _listenToPlayerErrors() {
@@ -223,10 +323,17 @@ class MediaPlayer extends ChangeNotifier {
       (event) {},
       onError: (Object e, StackTrace st) {
         debugPrint('Playback error: $e');
-        if (_player.processingState != ProcessingState.buffering &&
-            _player.processingState != ProcessingState.loading) {
+        final videoId = _currentSongNotifier.value?.id;
+        if (videoId == null) {
           _buttonState.value = ButtonState.paused;
           notifyListeners();
+        } else if (!_isRetrying) {
+          if (_retryPending) {
+            _buttonState.value = ButtonState.loading;
+            notifyListeners();
+          } else {
+            _retryPlayback(videoId);
+          }
         }
       },
     );
@@ -271,23 +378,29 @@ class MediaPlayer extends ChangeNotifier {
     });
   }
 
-  void _listenToShuffle() {
-  }
-
-  void _listenToChangesInSong() {
-    _player.currentIndexStream.listen((index) {
-      if (_songList.isNotEmpty && _currentIndex.value != index) {
-        _currentIndex.value = index;
-        _currentSongNotifier.value =
-            index != null && _songList.isNotEmpty && index < _songList.length
-                ? _songList[index].tag
-                : null;
-        if (_songList.isNotEmpty && _currentIndex.value != null) {
-          final MediaItem item = _songList[_currentIndex.value!].tag;
-          addHistory(item.extras!);
+  void _listenToAutofetch() {
+    _indexSubject.stream.listen((displayIndex) async {
+      if (displayIndex == null) return;
+      final orig = (_shuffleModeEnabled &&
+              _shuffleOrder.length == _songList.length &&
+              displayIndex < _shuffleOrder.length)
+          ? _shuffleOrder[displayIndex]
+          : displayIndex;
+      if (orig < 0 || orig >= _songList.length) return;
+      if (_songList.length - orig < 5 &&
+          GetIt.I<SettingsManager>().autofetchSongs &&
+          autoFetching == false) {
+        autoFetching = true;
+        final tag = _songList[orig].tag;
+        if (tag is MediaItem) {
+          List nextSongs = await GetIt.I<YTMusic>()
+              .getNextSongList(videoId: tag.id);
+          if (nextSongs.isNotEmpty) nextSongs.removeAt(0);
+          final songMaps =
+              nextSongs.map((s) => Map<String, dynamic>.from(s)).toList();
+          await _appendSongs(songMaps);
         }
-  
-        notifyListeners();
+        autoFetching = false;
       }
     });
   }
@@ -304,7 +417,7 @@ class MediaPlayer extends ChangeNotifier {
         _loopMode.value = LoopMode.off;
         break;
     }
-    _player.setLoopMode(_loopMode.value);
+    _player.setLoopMode(LoopMode.off);
   }
 
   Future<void> skipSilence(bool value) async {
@@ -313,28 +426,39 @@ class MediaPlayer extends ChangeNotifier {
   }
 
   Future<void> setShuffleModeEnabled(bool value) async {
+    if (_shuffleModeEnabled == value) return;
     _shuffleModeEnabled = value;
-    notifyListeners();
-    try {
-      if (value) {
-        await _shuffleRemainingQueue();
-      } else {
-        await _restoreOriginalQueueOrder();
-      }
-    } catch (e) {
-      debugPrint('Failed to toggle shuffle: $e');
+    if (value) {
+      _enableShuffle();
+    } else {
+      _shuffleOrder = [];
     }
+    _emit();
   }
 
-  Future<AudioSource> _getAudioSource(Map<String, dynamic> song) async {
+  // Metrolist: build a shuffled permutation of the queue with the current
+  // song first. The queue itself is never reordered.
+  void _enableShuffle() {
+    final n = _songList.length;
+    _shuffleOrder = [];
+    if (n <= 1) return;
+    final cur = (_currentIndex.value ?? 0).clamp(0, n - 1);
+    final rest = <int>[for (var i = 0; i < n; i++) if (i != cur) i]..shuffle();
+    _shuffleOrder = [cur, ...rest];
+  }
+
+  Future<IndexedAudioSource> _getAudioSource(Map<String, dynamic> song,
+      {bool useCache = true}) async {
     final videoId = song['videoId'];
     if (videoId == null) {
       throw Exception('No videoId');
     }
 
-    final cached = _sourceCache[videoId];
-    if (cached != null) {
-      return cached;
+    if (useCache) {
+      final cached = _sourceCache[videoId];
+      if (cached != null) {
+        return cached;
+      }
     }
 
     MediaItem tag = MediaItem(
@@ -354,8 +478,8 @@ class MediaPlayer extends ChangeNotifier {
         song['path'] != null &&
         (await File(song['path']).exists());
 
-    final source = isDownloaded
-        ? AudioSource.file(song['path'], tag: tag) as AudioSource
+    final IndexedAudioSource source = isDownloaded
+        ? AudioSource.file(song['path'], tag: tag)
         : YouTubeAudioSource(
             videoId: videoId,
             quality:
@@ -363,9 +487,20 @@ class MediaPlayer extends ChangeNotifier {
             tag: tag,
           );
 
-    _sourceCache[videoId] = source;
+    if (useCache) {
+      _sourceCache[videoId] = source;
+    }
 
     return source;
+  }
+
+  Future<IndexedAudioSource> _sourceFor(int index) async {
+    final entry = _songList[index];
+    final tag = entry.tag;
+    if (tag is MediaItem && tag.extras != null) {
+      return _getAudioSource(Map<String, dynamic>.from(tag.extras!));
+    }
+    return entry;
   }
 
   int _lastPlayRequestId = 0;
@@ -377,155 +512,91 @@ class MediaPlayer extends ChangeNotifier {
     _lastPlayRequestId = requestId;
 
     _cancelLoadingTimeout();
+    _retryPending = false;
     _loadingRetryCount = 0;
     _lastFailedVideoId = null;
 
-    _originalPlaylist = [song];
-
-    MediaItem tempTag = MediaItem(
-      id: song['videoId'],
-      title: song['title'] ?? 'Title',
-      album: song['album']?['name'],
-      artUri: song['thumbnails'] != null && (song['thumbnails'] as List).isNotEmpty
-          ? Uri.parse(song['thumbnails'][0]['url'].toString().replaceAll('w60-h60', 'w225-h225'))
-          : null,
-      artist: song['artists'] != null
-          ? song['artists'].map((artist) => artist['name']).join(',')
-          : null,
-      extras: song,
-    );
-    _currentSongNotifier.value = tempTag;
-    _buttonState.value = ButtonState.loading;
-    notifyListeners();
-
     try {
+      final source = await _getAudioSource(song);
+      if (_lastPlayRequestId != requestId) return;
+
+      _setQueue([source], 0);
+      _buttonState.value = ButtonState.loading;
+      notifyListeners();
+
       await _player.pause();
       await _player.stop();
       if (_lastPlayRequestId != requestId) return;
       await _player.clearAudioSources();
       if (_lastPlayRequestId != requestId) return;
-    } catch (e) {
-      debugPrint('Failed to stop/clear player: $e');
-    }
-
-    _buttonState.value = ButtonState.loading;
-    notifyListeners();
-
-    try {
-      final source = await _getAudioSource(song);
-      if (_lastPlayRequestId != requestId)
-        return;
 
       await _player.setAudioSource(source);
       if (_lastPlayRequestId != requestId) return;
 
       await _player.play();
 
+      _syncIndex(0);
+      _addHistoryForCurrent();
     } catch (e) {
       debugPrint('playSong playback error for ${song['videoId']}: $e');
-      if (_lastPlayRequestId == requestId) {
-        _buttonState.value = ButtonState.paused;
-        notifyListeners();
+      if (_lastPlayRequestId == requestId && song['videoId'] != null) {
+        _retryPlayback(song['videoId']);
       }
     }
   }
 
-
   Future<void> playNext(Map<String, dynamic> mediaItem) async {
-    final currentSong = _currentSongNotifier.value;
-    int insertIndexOrig = _originalPlaylist.length;
-    if (currentSong != null) {
-      final origIdx = _originalPlaylist.indexWhere((song) => song['videoId'] == currentSong.id);
-      if (origIdx != -1) {
-        insertIndexOrig = origIdx + 1;
-      }
-    }
+    final songMaps = await _resolveSongMaps(mediaItem);
+    if (songMaps.isEmpty) return;
+    await _insertSongsAfterCurrent(songMaps);
+  }
 
+  Future<List<Map<String, dynamic>>> _resolveSongMaps(
+      Map<String, dynamic> mediaItem) async {
     if (mediaItem['videoId'] != null) {
-      _originalPlaylist.insert(insertIndexOrig, mediaItem);
-      final audioSource = await _getAudioSource(mediaItem);
-
-      final currentIndex = _player.currentIndex ?? -1;
-      final sequenceLength = _player.sequence.length;
-      final insertIndex = (currentIndex + 1).clamp(0, sequenceLength);
-
-      if (sequenceLength > 0) {
-        await _player.insertAudioSource(insertIndex, audioSource);
-      } else {
-        await _player.setAudioSource(audioSource);
-      }
-
-
+      return [Map<String, dynamic>.from(mediaItem)];
     } else if (mediaItem['songs'] != null) {
-      List songs = mediaItem['songs'];
-      final songMaps = songs.map((s) => Map<String, dynamic>.from(s)).toList();
-      _originalPlaylist.insertAll(insertIndexOrig, songMaps);
-      await _addSongListToQueue(songs, isNext: true);
-
+      return (mediaItem['songs'] as List)
+          .map((s) => Map<String, dynamic>.from(s))
+          .toList();
     } else if (mediaItem['playlistId'] != null) {
-      List songs = mediaItem['type'] == 'ARTIST'
+      final List songs = mediaItem['type'] == 'ARTIST'
           ? await GetIt.I<YTMusic>()
               .getNextSongList(playlistId: mediaItem['playlistId'])
           : await GetIt.I<YTMusic>().getPlaylistSongs(mediaItem['playlistId']);
-      final songMaps = songs.map((s) => Map<String, dynamic>.from(s)).toList();
-      _originalPlaylist.insertAll(insertIndexOrig, songMaps);
-      await _addSongListToQueue(songs, isNext: true);
-
+      return songs.map((s) => Map<String, dynamic>.from(s)).toList();
     }
+    return [];
   }
 
   Future<void> playAll(List songs, {int index = 0}) async {
     if (songs.isEmpty) return;
 
     autoFetching = true;
-    _originalPlaylist = songs.map((s) => Map<String, dynamic>.from(s)).toList();
-
     _buttonState.value = ButtonState.loading;
     notifyListeners();
 
     try {
-      await _player.clearAudioSources();
-
-      final orderedSongs = <Map<String, dynamic>>[];
-      orderedSongs.add(Map<String, dynamic>.from(songs[index]));
-      for (int i = 0; i < songs.length; i++) {
-        if (i != index) {
-          orderedSongs.add(Map<String, dynamic>.from(songs[i]));
-        }
-      }
-
-      if (_shuffleModeEnabled) {
-        final first = orderedSongs.removeAt(0);
-        orderedSongs.shuffle();
-        orderedSongs.insert(0, first);
-      }
-
-      final sources = await Future.wait(orderedSongs.map((song) async {
+      final songMaps = songs.map((s) => Map<String, dynamic>.from(s)).toList();
+      final queue = <IndexedAudioSource>[];
+      for (final song in songMaps) {
         try {
-          return await _getAudioSource(song);
+          queue.add(await _getAudioSource(song));
         } catch (e) {
-          return null;
+          debugPrint('playAll: failed to build source: $e');
         }
-      }));
+      }
 
-      final validSources = sources.whereType<AudioSource>().toList();
-
-      if (validSources.isEmpty) {
-        autoFetching = false;
+      autoFetching = false;
+      if (queue.isEmpty) {
         _buttonState.value = ButtonState.paused;
         notifyListeners();
         return;
       }
 
-      await _player.setAudioSource(validSources.first);
-      await _player.play();
-
-      if (validSources.length > 1) {
-        await _player.addAudioSources(validSources.sublist(1));
-      }
-
-
-      autoFetching = false;
+      final start = index.clamp(0, queue.length - 1);
+      _setQueue(queue, start);
+      await _switchTo(start);
     } catch (e) {
       autoFetching = false;
       _buttonState.value = ButtonState.paused;
@@ -551,35 +622,16 @@ class MediaPlayer extends ChangeNotifier {
   }
 
   Future<void> addToQueue(Map<String, dynamic> mediaItem) async {
-    if (mediaItem['videoId'] != null) {
-      _originalPlaylist.add(mediaItem);
-      await _player.addAudioSource(await _getAudioSource(mediaItem));
-
-    } else if (mediaItem['songs'] != null) {
-      List songs = mediaItem['songs'];
-      final songMaps = songs.map((s) => Map<String, dynamic>.from(s)).toList();
-      _originalPlaylist.addAll(songMaps);
-      await _addSongListToQueue(songs, isNext: false);
-
-
-    } else if (mediaItem['playlistId'] != null) {
-      List songs = mediaItem['type'] == 'ARTIST'
-          ? await GetIt.I<YTMusic>()
-              .getNextSongList(playlistId: mediaItem['playlistId'])
-          : await GetIt.I<YTMusic>().getPlaylistSongs(mediaItem['playlistId']);
-      final songMaps = songs.map((s) => Map<String, dynamic>.from(s)).toList();
-      _originalPlaylist.addAll(songMaps);
-      await _addSongListToQueue(songs, isNext: false);
-
-    }
+    final songMaps = await _resolveSongMaps(mediaItem);
+    if (songMaps.isEmpty) return;
+    await _appendSongs(songMaps);
   }
 
   Future<void> startRelated(Map<String, dynamic> song,
       {bool radio = false, bool shuffle = false, bool isArtist = false}) async {
-    _originalPlaylist = [];
-    await _player.clearAudioSources();
+    final songMaps = <Map<String, dynamic>>[];
     if (!isArtist) {
-      await addToQueue(song);
+      songMaps.add(Map<String, dynamic>.from(song));
     }
     List songs = await GetIt.I<YTMusic>().getNextSongList(
         videoId: song['videoId'],
@@ -587,83 +639,92 @@ class MediaPlayer extends ChangeNotifier {
         radio: radio,
         shuffle: shuffle);
     if (songs.isNotEmpty) songs.removeAt(0);
-    final songMaps = songs.map((s) => Map<String, dynamic>.from(s)).toList();
-    _originalPlaylist.addAll(songMaps);
-    await _addSongListToQueue(songs, isNext: false);
-    await _player.play();
+    songMaps.addAll(songs.map((s) => Map<String, dynamic>.from(s)).toList());
+
+    final queue = <IndexedAudioSource>[];
+    for (final s in songMaps) {
+      try {
+        queue.add(await _getAudioSource(s));
+      } catch (e) {
+        debugPrint('startRelated: failed to build source: $e');
+      }
+    }
+    if (queue.isEmpty) return;
+
+    _setQueue(queue, 0);
+    await _switchTo(0);
   }
 
   Future<void> startPlaylistSongs(Map endpoint) async {
-    _originalPlaylist = [];
     List songs = await GetIt.I<YTMusic>().getNextSongList(
         playlistId: endpoint['playlistId'], params: endpoint['params']);
-
-    if (songs.isNotEmpty && songs.first['videoId'] == null) {
-    }
-
     final songMaps = songs.map((s) => Map<String, dynamic>.from(s)).toList();
-    _originalPlaylist.addAll(songMaps);
+    if (songMaps.isEmpty) return;
 
-    final firstSource = await _getAudioSource(songMaps.first);
-    await _player.setAudioSource(firstSource);
-    await _player.play();
-
-    if (songMaps.length > 1) {
-      await _addSongListToQueue(songMaps.sublist(1));
+    final queue = <IndexedAudioSource>[];
+    for (final s in songMaps) {
+      try {
+        queue.add(await _getAudioSource(s));
+      } catch (e) {
+        debugPrint('startPlaylistSongs: failed to build source: $e');
+      }
     }
+    if (queue.isEmpty) return;
+
+    _setQueue(queue, 0);
+    await _switchTo(0);
   }
 
   Future<void> stop() async {
     _cancelLoadingTimeout();
+    _retryPending = false;
     _loadingRetryCount = 0;
     _lastFailedVideoId = null;
     await _player.stop();
     await _player.clearAudioSources();
-    await _player.seek(Duration.zero, index: 0);
+    _songList = [];
+    _shuffleOrder = [];
     _currentIndex.value = null;
     _currentSongNotifier.value = null;
+    _sequenceSubject.add([]);
+    _indexSubject.add(null);
     notifyListeners();
   }
 
-  Future<void> _addSongListToQueue(List songs, {bool isNext = false}) async {
-    if (songs.isEmpty) return;
-
-    final songMaps = songs.map((s) => Map<String, dynamic>.from(s)).toList();
-    if (_shuffleModeEnabled) {
-      songMaps.shuffle();
+  Future<void> _appendSongs(List<Map<String, dynamic>> songMaps) async {
+    if (songMaps.isEmpty) return;
+    final newSources = await Future.wait(
+        songMaps.map((song) => _getAudioSource(song)));
+    final oldLen = _songList.length;
+    _songList.addAll(newSources);
+    if (_shuffleModeEnabled && _shuffleOrder.length == oldLen && oldLen > 0) {
+      _shuffleOrder.addAll(
+          [for (var i = oldLen; i < _songList.length; i++) i]);
     }
-
-    final newSources = await Future.wait(songMaps.map((song) async {
-      return await _getAudioSource(song);
-    }));
-
-    final queueLength = _player.sequence.length;
-
-    if (isNext) {
-      final currentIndex = _player.currentIndex ?? -1;
-      int insertIndex = (currentIndex + 1).clamp(0, queueLength);
-      await _player.insertAudioSources(insertIndex, newSources);
-    } else {
-      await _player.addAudioSources(newSources);
-    }
+    _emit();
   }
 
-  void _listenToAutofetch() {
-    player.currentIndexStream.listen((index) async {
-      if (index == null) return;
-      if (player.sequence.length - index < 5 &&
-          GetIt.I<SettingsManager>().autofetchSongs &&
-          autoFetching == false) {
-        autoFetching = true;
-        List nextSongs = await GetIt.I<YTMusic>()
-            .getNextSongList(videoId: player.sequence[index].tag.id);
-        if (nextSongs.isNotEmpty) nextSongs.removeAt(0);
-        final songMaps = nextSongs.map((s) => Map<String, dynamic>.from(s)).toList();
-        _originalPlaylist.addAll(songMaps);
-        await _addSongListToQueue(nextSongs);
-        autoFetching = false;
+  Future<void> _insertSongsAfterCurrent(
+      List<Map<String, dynamic>> songMaps) async {
+    if (songMaps.isEmpty) return;
+    final newSources = await Future.wait(
+        songMaps.map((song) => _getAudioSource(song)));
+    final oldLen = _songList.length;
+    final current = _currentIndex.value;
+    final insertAt =
+        (current == null) ? oldLen : (current + 1).clamp(0, oldLen);
+    final k = newSources.length;
+    _songList.insertAll(insertAt, newSources);
+    if (_shuffleModeEnabled && _shuffleOrder.length == oldLen && oldLen > 0) {
+      for (var i = 0; i < _shuffleOrder.length; i++) {
+        if (_shuffleOrder[i] >= insertAt) _shuffleOrder[i] += k;
       }
-    });
+      final curInv = _shuffleOrder.indexOf(current ?? 0);
+      final at = curInv < 0 ? 0 : curInv + 1;
+      _shuffleOrder.insertAll(
+          at, [for (var i = 0; i < k; i++) insertAt + i]);
+    }
+    _emit();
   }
 
   void setTimer(Duration duration) {
@@ -686,114 +747,148 @@ class MediaPlayer extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<AudioSource> _cloneSource(AudioSource source, Map<String, dynamic> song) async {
-    if (source is UriAudioSource) {
-      return AudioSource.uri(source.uri, tag: source.tag);
+  Future<void> setPlaybackSpeed(double speed) async {
+    _playbackSpeed = speed;
+    try {
+      await _player.setSpeed(speed);
+    } catch (e) {
+      debugPrint('Failed to set playback speed: $e');
     }
-    return await _getAudioSource(song);
+    await GetIt.I<EqualizerService>().applyEqualizer();
+    notifyListeners();
   }
 
-  Future<void> _shuffleRemainingQueue() async {
+  Future<void> setPitch(double pitch) async {
+    _pitch = pitch;
     try {
-      final currentSong = _currentSongNotifier.value;
-      if (currentSong == null) return;
-      final currentIndex = _player.currentIndex;
-      if (currentIndex == null) return;
-      final currentPosition = _player.position;
-
-      final allSources = List<IndexedAudioSource>.from(_player.sequence);
-      if (allSources.isEmpty || currentIndex + 1 >= allSources.length) return;
-
-      final beforeSources = allSources.sublist(0, currentIndex);
-      final remainingSources = allSources.sublist(currentIndex + 1);
-
-      final List<AudioSource> newBeforeSources = [];
-      for (int i = 0; i < beforeSources.length; i++) {
-        final src = beforeSources[i];
-        final song = _originalPlaylist.firstWhere(
-          (s) => s['videoId'] == (src.tag as MediaItem).id,
-          orElse: () => <String, dynamic>{},
-        );
-        newBeforeSources.add(await _cloneSource(src, song));
-      }
-
-      final List<AudioSource> newRemainingSources = [];
-      for (int i = 0; i < remainingSources.length; i++) {
-        final src = remainingSources[i];
-        final song = _originalPlaylist.firstWhere(
-          (s) => s['videoId'] == (src.tag as MediaItem).id,
-          orElse: () => <String, dynamic>{},
-        );
-        newRemainingSources.add(await _cloneSource(src, song));
-      }
-
-      newRemainingSources.shuffle();
-
-      final currentSrc = allSources[currentIndex];
-      final currentSongMap = _originalPlaylist.firstWhere(
-        (s) => s['videoId'] == (currentSrc.tag as MediaItem).id,
-        orElse: () => <String, dynamic>{},
-      );
-      final newCurrentSource = await _cloneSource(currentSrc, currentSongMap);
-
-      final newSources = [...newBeforeSources, newCurrentSource, ...newRemainingSources];
-
-      await _player.setAudioSource(
-        ConcatenatingAudioSource(children: newSources),
-        initialIndex: currentIndex,
-        initialPosition: currentPosition,
-      );
+      await _player.setPitch(pitch);
     } catch (e) {
-      debugPrint('Failed to shuffle queue: $e');
+      debugPrint('Failed to set pitch: $e');
     }
+    await GetIt.I<EqualizerService>().applyEqualizer();
+    notifyListeners();
   }
 
-  Future<void> _restoreOriginalQueueOrder() async {
+  void _setQueue(List<IndexedAudioSource> queue, int index) {
+    _songList = List.of(queue);
+    if (_shuffleModeEnabled) {
+      _enableShuffle();
+    }
+    _syncIndex(index);
+  }
+
+  Future<void> reorderQueue(int oldIndex, int newIndex) async {
+    if (oldIndex < 0 || oldIndex >= _songList.length) return;
+    if (newIndex < 0 || newIndex >= _songList.length) return;
+    if (oldIndex == newIndex) return;
+
+    final item = _songList.removeAt(oldIndex);
+    _songList.insert(newIndex, item);
+
+    final cur = _currentIndex.value;
+    if (cur != null) {
+      if (cur == oldIndex) {
+        _currentIndex.value = newIndex;
+      } else if (oldIndex < cur && newIndex >= cur) {
+        _currentIndex.value = cur - 1;
+      } else if (oldIndex > cur && newIndex <= cur) {
+        _currentIndex.value = cur + 1;
+      }
+    }
+
+    if (_shuffleModeEnabled) {
+      _enableShuffle();
+    }
+    _emit();
+  }
+
+  // ---- Navigation (Metrolist: order is the permutation, not the queue) ----
+
+  Future<void> next() => _next(afterCompletion: false);
+
+  Future<void> previous() => _previous();
+
+  Future<void> playAt(int displayIndex) async {
+    if (displayIndex < 0) return;
+    final eff = _effectiveIndices;
+    if (displayIndex >= eff.length) return;
+    await _switchTo(eff[displayIndex]);
+  }
+
+  Future<void> _next({bool afterCompletion = false}) async {
+    if (_songList.isEmpty || _currentIndex.value == null) return;
+    final eff = _effectiveIndices;
+    if (eff.isEmpty) return;
+    final invPos = eff.indexOf(_currentIndex.value!);
+    if (invPos < 0) return;
+    var nextPos = invPos + 1;
+    if (nextPos >= eff.length) {
+      if (_loopMode.value == LoopMode.all) {
+        nextPos = 0;
+      } else {
+        if (afterCompletion) {
+          await _player.seek(Duration.zero);
+          await _player.pause();
+          _buttonState.value = ButtonState.paused;
+          notifyListeners();
+        }
+        return;
+      }
+    }
+    await _switchTo(eff[nextPos]);
+  }
+
+  Future<void> _previous() async {
+    if (_songList.isEmpty || _currentIndex.value == null) return;
+    if (_player.position > const Duration(seconds: 3)) {
+      await _player.seek(Duration.zero);
+      return;
+    }
+    final eff = _effectiveIndices;
+    if (eff.isEmpty) return;
+    final invPos = eff.indexOf(_currentIndex.value!);
+    if (invPos < 0) return;
+    var prevPos = invPos - 1;
+    if (prevPos < 0) {
+      if (_loopMode.value == LoopMode.all) {
+        prevPos = eff.length - 1;
+      } else {
+        return;
+      }
+    }
+    await _switchTo(eff[prevPos]);
+  }
+
+  Future<void> _switchTo(int index) {
+    _switchOp = _switchOp.then((_) => _doSwitch(index));
+    return _switchOp;
+  }
+
+  Future<void> _doSwitch(int index) async {
+    if (_songList.isEmpty || index < 0 || index >= _songList.length) return;
+    _syncIndex(index);
+    _retryPending = false;
+    _buttonState.value = ButtonState.loading;
+    notifyListeners();
     try {
-      final currentSong = _currentSongNotifier.value;
-      if (currentSong == null) return;
-      final currentPosition = _player.position;
-
-      final allSources = List<IndexedAudioSource>.from(_player.sequence);
-
-      final sourceMap = <String, IndexedAudioSource>{};
-      for (var source in allSources) {
-        final tag = source.tag;
-        if (tag is MediaItem) {
-          sourceMap[tag.id] = source;
-        }
-      }
-
-      final usedSources = <IndexedAudioSource>{};
-      final List<AudioSource> originalSources = [];
-      for (var song in _originalPlaylist) {
-        final videoId = song['videoId'];
-        final source = sourceMap[videoId];
-        if (source != null && !usedSources.contains(source)) {
-          originalSources.add(await _cloneSource(source, song));
-          usedSources.add(source);
-        } else {
-          final newSource = await _getAudioSource(song);
-          originalSources.add(newSource);
-        }
-      }
-
-      final origIndex = originalSources.indexWhere((source) {
-        if (source is IndexedAudioSource) {
-          final tag = source.tag;
-          return tag is MediaItem && tag.id == currentSong.id;
-        }
-        return false;
-      });
-      if (origIndex == -1) return;
-
-      await _player.setAudioSource(
-        ConcatenatingAudioSource(children: originalSources),
-        initialIndex: origIndex,
-        initialPosition: currentPosition,
-      );
+      final source = await _sourceFor(index);
+      await _player.stop();
+      await _player.clearAudioSources();
+      await _player.setAudioSource(source);
+      await _player.play();
+      _lastCompletionSongId = _songList[index].tag?.id;
+      _lastCompletionTime = DateTime.now();
+      _addHistoryForCurrent();
     } catch (e) {
-      debugPrint('Failed to restore queue order: $e');
+      debugPrint('Failed to play index $index: $e');
+      final tag = _songList[index].tag;
+      final id = tag is MediaItem ? tag.id : null;
+      if (id != null) {
+        _retryPlayback(id);
+      } else {
+        _buttonState.value = ButtonState.paused;
+        notifyListeners();
+      }
     }
   }
 
@@ -826,7 +921,6 @@ class MediaPlayer extends ChangeNotifier {
 
     await _player.play();
   }
-
 }
 
 enum ButtonState { loading, paused, playing }

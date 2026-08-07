@@ -7,6 +7,7 @@ import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:just_audio_platform_interface/just_audio_platform_interface.dart';
 import 'package:media_kit/media_kit.dart';
 
+import 'media_player.dart';
 import 'settings_manager.dart';
 
 class EqualizerService {
@@ -128,23 +129,34 @@ class EqualizerService {
   }
 
   String _buildAfValue(List<double> gains) {
+    final tempoScale = _tempoScale();
+
     final eqParts = <String>[];
     for (int i = 0; i < bandCount && i < gains.length; i++) {
       final freq = bandFrequencies[i];
       final gain = gains[i].clamp(minGain, maxGain);
       if (gain != 0) {
-        eqParts.add('equalizer=$freq:q:1:${gain.toStringAsFixed(2)}');
+        eqParts.add(
+          'equalizer=f=$freq:width_type=q:width=1:g=${gain.toStringAsFixed(2)}',
+        );
       }
     }
 
     if (eqParts.isEmpty) {
-      return 'scaletempo=scale=1.00000000';
+      return 'scaletempo:scale=$tempoScale';
     }
-    return '${eqParts.join(',')},scaletempo=scale=1.00000000';
+    return 'lavfi=[${eqParts.join(',')}],scaletempo:scale=$tempoScale';
+  }
+
+  String _tempoScale() {
+    final mediaPlayer = GetIt.I<MediaPlayer>();
+    final rate = mediaPlayer.playbackSpeed;
+    final pitch = mediaPlayer.pitch > 0 ? mediaPlayer.pitch : 1.0;
+    return (rate / pitch).toStringAsFixed(8);
   }
 
   Future<void> _removeEqualizerFilter() async {
-    const resetAf = 'scaletempo=scale=1.00000000';
+    final resetAf = 'scaletempo:scale=${_tempoScale()}';
     if (_lastAppliedAf == resetAf) return;
     _lastAppliedAf = resetAf;
 

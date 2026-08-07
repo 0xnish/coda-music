@@ -1,4 +1,5 @@
 import 'package:bloc/bloc.dart';
+import 'package:Coda/ytmusic/helpers.dart';
 import 'package:Coda/ytmusic/ytmusic.dart';
 import 'package:hive/hive.dart';
 
@@ -10,12 +11,7 @@ class SearchCubit extends Cubit<SearchState> {
   SearchCubit(this._ytmusic) : super(const SearchState());
 
   void init(String query) {
-    final history = Hive.box('SEARCH_HISTORY')
-        .values
-        .toList()
-        .cast<String>()
-        .reversed
-        .toList();
+    final history = searchHistory();
     if (query.isNotEmpty) {
       emit(state.copyWith(query: query, searchHistory: history));
       submitSearch(query);
@@ -28,13 +24,7 @@ class SearchCubit extends Cubit<SearchState> {
   }
 
   void loadSearchHistory() {
-    final history = Hive.box('SEARCH_HISTORY')
-        .values
-        .toList()
-        .cast<String>()
-        .reversed
-        .toList();
-    emit(state.copyWith(searchHistory: history));
+    emit(state.copyWith(searchHistory: searchHistory()));
   }
 
   void updateQuery(String query) {
@@ -168,8 +158,14 @@ class SearchCubit extends Cubit<SearchState> {
 
   void _saveSearchHistory(String query) {
     if (Hive.box('SETTINGS').get('SEARCH_HISTORY', defaultValue: true)) {
-      Hive.box('SEARCH_HISTORY').delete(query.toLowerCase());
-      Hive.box('SEARCH_HISTORY').put(query.toLowerCase(), query);
+      final box = Hive.box('SEARCH_HISTORY');
+      final lower = query.toLowerCase();
+      for (final key in box.keys.toList()) {
+        if ((box.get(key) as String).toLowerCase() == lower) {
+          box.delete(key);
+        }
+      }
+      box.put(searchHistoryKey(query, DateTime.now()), query);
     }
   }
 

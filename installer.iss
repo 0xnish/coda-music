@@ -1,11 +1,11 @@
 [Setup]
-AppName=CODA MUSIC
-AppVersion=2.4.0
-AppPublisher=Nishanth JP
-DefaultDirName={autopf}\CODA MUSIC
-DefaultGroupName=CODA MUSIC
+AppName=Coda Music
+AppVersion=2.5.0
+AppPublisher=coder-nishanth
+DefaultDirName={autopf}\Coda Music
+DefaultGroupName=Coda Music
 OutputDir=..\release
-OutputBaseFilename=Coda Music v2.4.0 Setup
+OutputBaseFilename=Coda Music v2.5.0 Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -23,12 +23,12 @@ Source: "build\windows\x64\runner\Release\*.dll"; DestDir: "{app}"; Flags: ignor
 Source: "build\windows\x64\runner\Release\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\CODA MUSIC"; Filename: "{app}\coda-music.exe"
-Name: "{group}\Uninstall CODA MUSIC"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\CODA MUSIC"; Filename: "{app}\coda-music.exe"; Tasks: desktopicon
+Name: "{group}\Coda Music"; Filename: "{app}\coda-music.exe"
+Name: "{group}\Uninstall Coda Music"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\Coda Music"; Filename: "{app}\coda-music.exe"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"; Flags: checkedonce
 
 [Run]
-Filename: "{app}\coda-music.exe"; Description: "Launch CODA MUSIC"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\coda-music.exe"; Description: "Launch Coda Music"; Flags: nowait postinstall skipifsilent

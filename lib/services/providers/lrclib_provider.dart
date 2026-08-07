@@ -22,7 +22,7 @@ class _Track {
 }
 
 const String _baseUrl = 'https://lrclib.net/api';
-const Duration _timeout = Duration(seconds: 10);
+const Duration _timeout = Duration(seconds: 6);
 
 final List<RegExp> _titleCleanupPatterns = [
   RegExp(
@@ -173,30 +173,30 @@ Future<List<_Track>> _queryLyrics({
   final cleanedTitle = _cleanTitle(title);
   final cleanedArtist = _cleanArtist(artist);
 
-  var results = await _queryWithParams(
-    trackName: cleanedTitle,
-    artistName: cleanedArtist,
-    albumName: album,
-  );
-  if (results.isNotEmpty) return results;
+  final results = await Future.wait([
+    _queryWithParams(
+      trackName: cleanedTitle,
+      artistName: cleanedArtist,
+      albumName: album,
+    ),
+    _queryWithParams(trackName: cleanedTitle),
+    _queryWithParams(query: '$cleanedArtist $cleanedTitle'),
+    _queryWithParams(query: cleanedTitle),
+    if (cleanedTitle != title.trim())
+      _queryWithParams(
+        trackName: title.trim(),
+        artistName: artist.trim(),
+      ),
+  ]);
 
-  results = await _queryWithParams(trackName: cleanedTitle);
-  if (results.isNotEmpty) return results;
-
-  results = await _queryWithParams(query: '$cleanedArtist $cleanedTitle');
-  if (results.isNotEmpty) return results;
-
-  results = await _queryWithParams(query: cleanedTitle);
-  if (results.isNotEmpty) return results;
-
-  if (cleanedTitle != title.trim()) {
-    results = await _queryWithParams(
-      trackName: title.trim(),
-      artistName: artist.trim(),
-    );
+  final seen = <int>{};
+  final merged = <_Track>[];
+  for (final batch in results) {
+    for (final track in batch) {
+      if (seen.add(track.id)) merged.add(track);
+    }
   }
-
-  return results;
+  return merged;
 }
 
 Future<Lyrics?> getLrclibLyrics({

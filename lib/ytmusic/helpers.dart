@@ -53,3 +53,22 @@ dynamic nav(dynamic root, List<dynamic> items, {bool noneIfAbsent = false}) {
 String getContinuationString(dynamic ctoken) {
   return "&ctoken=$ctoken&continuation=$ctoken";
 }
+
+List<String> searchHistory() {
+  final box = Hive.box('SEARCH_HISTORY');
+  final entries = box.keys.toList().map((key) {
+    final value = box.get(key) as String;
+    final idx = key.toString().indexOf(':');
+    final ts = idx > 0 ? int.tryParse(key.toString().substring(0, idx)) ?? 0 : 0;
+    return (ts, value);
+  }).toList()
+    ..sort((a, b) {
+      final t = b.$1.compareTo(a.$1);
+      return t != 0 ? t : a.$2.compareTo(b.$2);
+    });
+  return entries.map((e) => e.$2).toList();
+}
+
+String searchHistoryKey(String query, DateTime now) {
+  return '${now.millisecondsSinceEpoch.toString().padLeft(19, '0')}:${query.toLowerCase()}';
+}

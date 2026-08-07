@@ -1,5 +1,4 @@
 import 'package:Coda/ytmusic/client.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 
 import '../helpers.dart';
 import 'utils.dart';
@@ -8,9 +7,7 @@ mixin SearchMixin on YTClient {
   Future<List<Map<String, dynamic>>> getSearchSuggestions(String query,
       {bool detailedRuns = false}) async {
     if (query == '') {
-      return Hive.box('SEARCH_HISTORY')
-          .values
-          .toList()
+      return searchHistory()
           .map((el) => {
                 'type': 'TEXT',
                 'query': el,
@@ -20,8 +17,7 @@ mixin SearchMixin on YTClient {
     }
     Map<String, dynamic> body = {'input': query};
     String endpoint = 'music/get_search_suggestions';
-    List<Map<String, dynamic>> suggestions = Hive.box('SEARCH_HISTORY')
-        .values
+    List<Map<String, dynamic>> suggestions = searchHistory()
         .where((el) => el.toLowerCase().contains(query.toLowerCase()))
         .toList()
         .map((el) => {

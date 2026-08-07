@@ -51,12 +51,12 @@ class _AppShellState extends State<AppShell> {
     final mediaPlayer = GetIt.I<MediaPlayer>();
 
     if (ctrl && event.logicalKey == LogicalKeyboardKey.arrowRight) {
-      mediaPlayer.player.seekToNext();
+      mediaPlayer.next();
       return true;
     }
 
     if (ctrl && event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-      mediaPlayer.player.seekToPrevious();
+      mediaPlayer.previous();
       return true;
     }
 

@@ -109,7 +109,7 @@ class _BottomPlayerState extends State<BottomPlayer> {
                                 const SizedBox(width: 4),
                                 AdaptiveIconButton(
                                   onPressed: () {
-                                    GetIt.I<MediaPlayer>().player.seekToPrevious();
+                                    GetIt.I<MediaPlayer>().previous();
                                   },
                                   icon: const Icon(
                                     Icons.skip_previous,
@@ -143,7 +143,7 @@ class _BottomPlayerState extends State<BottomPlayer> {
                                 ),
                                 AdaptiveIconButton(
                                   onPressed: () {
-                                    GetIt.I<MediaPlayer>().player.seekToNext();
+                                    GetIt.I<MediaPlayer>().next();
                                   },
                                   icon: const Icon(
                                     Icons.skip_next,

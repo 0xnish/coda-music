@@ -18,6 +18,7 @@ import '../../services/bottom_message.dart';
 import '../../themes/dark.dart';
 import '../../utils/adaptive_widgets/adaptive_widgets.dart';
 import '../../utils/bottom_modals.dart';
+import '../../utils/palette_cache.dart';
 import '../../ytmusic/ytmusic.dart';
 import 'widgets/lyrics_box.dart';
 import 'widgets/queue_list.dart';
@@ -35,6 +36,8 @@ class _PlayerPageState extends State<PlayerPage> {
   Color? color;
   List<Color> paletteColors = [];
   bool fetchedSong = false;
+  bool _gradientPaused = false;
+  bool _routeSettled = false;
   late MediaItem? currentSong;
   bool _showLyrics = false;
 
@@ -53,11 +56,31 @@ class _PlayerPageState extends State<PlayerPage> {
       });
     }
     currentSong = GetIt.I<MediaPlayer>().currentSongNotifier.value;
+    paletteColors = PaletteCache.get(currentSong?.id ?? '') ?? [];
     GetIt.I<MediaPlayer>().currentSongNotifier.addListener(songListener);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final route = ModalRoute.of(context);
+      final animation = route?.animation;
+      if (animation == null) {
+        _routeSettled = true;
+      } else {
+        animation.addStatusListener(_routeStatusListener);
+      }
+    });
+  }
+
+  void _routeStatusListener(AnimationStatus status) {
+    if (!mounted) return;
+    if (status == AnimationStatus.completed && !_routeSettled) {
+      setState(() => _routeSettled = true);
+    } else if (status == AnimationStatus.reverse && !_gradientPaused) {
+      setState(() => _gradientPaused = true);
+    }
   }
 
   @override
-  dispose() {
+  void dispose() {
     GetIt.I<MediaPlayer>().currentSongNotifier.removeListener(songListener);
     super.dispose();
   }
@@ -72,41 +95,60 @@ class _PlayerPageState extends State<PlayerPage> {
     }
   }
 
+  void _showSpeedControl() {
+    final mediaPlayer = GetIt.I<MediaPlayer>();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (context) => SpeedControlSheet(mediaPlayer: mediaPlayer),
+    );
+  }
+
   Future<void> updateBackgroundColor(ImageProvider image) async {
+    if (!_routeSettled) {
+      await _waitUntilSettled();
+    }
+    if (!mounted) return;
     final palette = await PaletteGenerator.fromImageProvider(
-      image,
+      ResizeImage(image, width: 64, height: 64),
       maximumColorCount: 20,
     );
-    if (mounted) {
-      List<Color> extractedColors = [];
+    if (!mounted) return;
+    List<Color> extractedColors = [];
 
-      if (palette.dominantColor != null) {
-        extractedColors.add(palette.dominantColor!.color);
-      }
-      if (palette.vibrantColor != null) {
-        extractedColors.add(palette.vibrantColor!.color);
-      }
-      if (palette.mutedColor != null) {
-        extractedColors.add(palette.mutedColor!.color);
-      }
-      if (palette.darkVibrantColor != null) {
-        extractedColors.add(palette.darkVibrantColor!.color);
-      }
-      if (palette.darkMutedColor != null) {
-        extractedColors.add(palette.darkMutedColor!.color);
-      }
-      if (palette.lightVibrantColor != null) {
-        extractedColors.add(palette.lightVibrantColor!.color);
-      }
+    if (palette.dominantColor != null) {
+      extractedColors.add(palette.dominantColor!.color);
+    }
+    if (palette.vibrantColor != null) {
+      extractedColors.add(palette.vibrantColor!.color);
+    }
+    if (palette.mutedColor != null) {
+      extractedColors.add(palette.mutedColor!.color);
+    }
+    if (palette.darkVibrantColor != null) {
+      extractedColors.add(palette.darkVibrantColor!.color);
+    }
+    if (palette.darkMutedColor != null) {
+      extractedColors.add(palette.darkMutedColor!.color);
+    }
+    if (palette.lightVibrantColor != null) {
+      extractedColors.add(palette.lightVibrantColor!.color);
+    }
 
-      if (extractedColors.isEmpty && palette.colors.isNotEmpty) {
-        extractedColors = palette.colors.take(4).toList();
-      }
+    if (extractedColors.isEmpty && palette.colors.isNotEmpty) {
+      extractedColors = palette.colors.take(4).toList();
+    }
 
-      setState(() {
-        color = palette.dominantColor?.color;
-        paletteColors = extractedColors;
-      });
+    setState(() {
+      color = palette.dominantColor?.color;
+      paletteColors = extractedColors;
+    });
+    PaletteCache.put(currentSong?.id ?? '', extractedColors);
+  }
+
+  Future<void> _waitUntilSettled() async {
+    while (mounted && !_routeSettled) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
     }
   }
 
@@ -136,15 +178,11 @@ class _PlayerPageState extends State<PlayerPage> {
           brightness: Brightness.dark,
         ),
       ),
-      child: (widget.videoId != null && fetchedSong == false)
-          ? const Center(
-              child: LoadingIndicatorM3E(),
-            )
-          : WillPopScope(
-              onWillPop: () async {
-                return true;
-              },
-              child: Scaffold(
+      child: WillPopScope(
+          onWillPop: () async {
+            return true;
+          },
+          child: Scaffold(
                 key: _key,
                 backgroundColor: Colors.black,
                 body: Focus(
@@ -160,45 +198,48 @@ class _PlayerPageState extends State<PlayerPage> {
                   child: Stack(
                   children: [
                     Positioned.fill(
-                      child: AnimatedGradientBackground(
-                        colors: paletteColors.isNotEmpty
-                            ? paletteColors
-                            : [
-                                Colors.deepPurple.shade900,
-                                Colors.deepPurple.shade700,
-                                Colors.purple.shade800,
-                                Colors.indigo.shade900,
-                              ],
-                      ),
+                      child: _gradientPaused
+                          ? const SizedBox.shrink()
+                          : AnimatedGradientBackground(
+                              paused: !_routeSettled,
+                              colors: paletteColors.isNotEmpty
+                                  ? paletteColors
+                                  : [
+                                      Colors.deepPurple.shade900,
+                                      Colors.deepPurple.shade700,
+                                      Colors.purple.shade800,
+                                      Colors.indigo.shade900,
+                                    ],
+                            ),
                     ),
 
-                    SafeArea(
-                      child: Column(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                            child: Row(
-                              children: [
-                                GestureDetector(
-                                  onTap: () => context.pop(),
-                                  child: Container(
-                                    width: 36,
-                                    height: 30,
-                                    alignment: Alignment.center,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.08),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Icon(
-                                      Icons.arrow_back,
-                                      size: 18,
-                                      color: Colors.white.withValues(alpha: 0.7),
+                      SafeArea(
+                        child: Column(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                              child: Row(
+                                children: [
+                                  GestureDetector(
+                                    onTap: () => context.pop(),
+                                    child: Container(
+                                      width: 36,
+                                      height: 30,
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(alpha: 0.08),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Icon(
+                                        Icons.arrow_back,
+                                        size: 18,
+                                        color: Colors.white.withValues(alpha: 0.7),
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
                           Expanded(
                             child: LayoutBuilder(
                               builder: (context, constraints) {
@@ -300,14 +341,21 @@ class _PlayerPageState extends State<PlayerPage> {
                                                                               .circular(
                                                                                   12),
                                                                       child:
-                                                                          SongThumbnail(
-                                                                        song: currentSong!
-                                                                            .extras!,
-                                                                        fit: BoxFit
-                                                                            .cover,
-                                                                        onImageReady:
-                                                                            updateBackgroundColor,
-                                                                      ),
+                                                                          currentSong ==
+                                                                              null
+                                                                              ? Container(
+                                                                                  color: Colors
+                                                                                      .white
+                                                                                      .withValues(alpha: 0.08),
+                                                                                )
+                                                                              : SongThumbnail(
+                                                                                  song: currentSong!
+                                                                                      .extras!,
+                                                                                  fit: BoxFit
+                                                                                      .cover,
+                                                                                  onImageReady:
+                                                                                      updateBackgroundColor,
+                                                                                ),
                                                                     ),
                                                                   ),
                                                                 ),
@@ -328,7 +376,8 @@ class _PlayerPageState extends State<PlayerPage> {
                                                   child: Padding(
                                                     padding:
                                                         const EdgeInsets.all(40.0),
-                                                    child: _showLyrics
+                                                    child: _showLyrics &&
+                                                            currentSong != null
                                                         ? LyricsBox(
                                                             key: ValueKey(currentSong!.id),
                                                             currentSong: currentSong!,
@@ -379,12 +428,19 @@ class _PlayerPageState extends State<PlayerPage> {
                                                 child: ClipRRect(
                                                   borderRadius:
                                                       BorderRadius.circular(12),
-                                                  child: SongThumbnail(
-                                                    song: currentSong!.extras!,
-                                                    fit: BoxFit.cover,
-                                                    onImageReady:
-                                                        updateBackgroundColor,
-                                                  ),
+                                                  child: currentSong == null
+                                                      ? Container(
+                                                          color: Colors.white
+                                                              .withValues(
+                                                                  alpha: 0.08),
+                                                        )
+                                                      : SongThumbnail(
+                                                          song: currentSong!
+                                                              .extras!,
+                                                          fit: BoxFit.cover,
+                                                          onImageReady:
+                                                              updateBackgroundColor,
+                                                        ),
                                                 ),
                                               ),
                                             ),
@@ -412,8 +468,8 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Widget _buildTitleAndControls(BuildContext context, {bool centered = false}) {
-    if (currentSong == null) return const SizedBox();
     MediaPlayer mediaPlayer = context.watch<MediaPlayer>();
+    final bool hasSong = currentSong != null;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment:
@@ -470,29 +526,36 @@ class _PlayerPageState extends State<PlayerPage> {
                         ? Colors.white.withValues(alpha: 0.7)
                         : Colors.redAccent,
                   ),
-                  onPressed: () async {
-                    if (item == null) {
-                      await Hive.box('FAVOURITES').put(
-                        currentSong!.extras!['videoId'],
-                        {
-                          ...currentSong!.extras!,
-                          'createdAt': DateTime.now().millisecondsSinceEpoch
-                        },
-                      );
-                    } else {
-                      await value.delete(currentSong!.extras!['videoId']);
-                    }
-                  },
+                  onPressed: hasSong
+                      ? () async {
+                          if (item == null) {
+                            await Hive.box('FAVOURITES').put(
+                              currentSong!.extras!['videoId'],
+                              {
+                                ...currentSong!.extras!,
+                                'createdAt':
+                                    DateTime.now().millisecondsSinceEpoch
+                              },
+                            );
+                          } else {
+                            await value.delete(
+                                currentSong!.extras!['videoId']);
+                          }
+                        }
+                      : null,
                 );
               },
             ),
             const SizedBox(width: 8),
             AdaptiveIconButton(
-              onPressed: () {
-                final link = 'https://music.youtube.com/watch?v=${currentSong?.id ?? ''}';
-                Clipboard.setData(ClipboardData(text: link));
-                BottomMessage.showText(context, 'Link copied');
-              },
+              onPressed: hasSong
+                  ? () {
+                      final link =
+                          'https://music.youtube.com/watch?v=${currentSong?.id ?? ''}';
+                      Clipboard.setData(ClipboardData(text: link));
+                      BottomMessage.showText(context, 'Link copied');
+                    }
+                  : null,
               icon: Icon(
                 Icons.link,
                 size: 22,
@@ -500,20 +563,31 @@ class _PlayerPageState extends State<PlayerPage> {
               ),
             ),
             const SizedBox(width: 8),
+            AdaptiveIconButton(
+              onPressed: hasSong ? _showSpeedControl : null,
+              icon: Icon(
+                Icons.speed,
+                size: 24,
+                color: Colors.white.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(width: 8),
             Builder(
               builder: (buttonContext) => AdaptiveIconButton(
-                onPressed: () {
-                  final RenderBox renderBox =
-                      buttonContext.findRenderObject() as RenderBox;
-                  final position = renderBox.localToGlobal(Offset.zero);
-                  final size = renderBox.size;
-                  Modals.showPlayerOptionsModal(
-                    context,
-                    mediaPlayer.currentSongNotifier.value!.extras!,
-                    buttonPosition: position,
-                    buttonSize: size,
-                  );
-                },
+                onPressed: hasSong
+                    ? () {
+                        final RenderBox renderBox =
+                            buttonContext.findRenderObject() as RenderBox;
+                        final position = renderBox.localToGlobal(Offset.zero);
+                        final size = renderBox.size;
+                        Modals.showPlayerOptionsModal(
+                          context,
+                          mediaPlayer.currentSongNotifier.value!.extras!,
+                          buttonPosition: position,
+                          buttonSize: size,
+                        );
+                      }
+                    : null,
                 icon: Icon(
                   Icons.more_horiz,
                   size: 24,
@@ -550,9 +624,12 @@ class _PlayerPageState extends State<PlayerPage> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             AdaptiveIconButton(
-              onPressed: () {
-                mediaPlayer.setShuffleModeEnabled(!mediaPlayer.shuffleModeEnabled);
-              },
+              onPressed: hasSong
+                  ? () {
+                      mediaPlayer.setShuffleModeEnabled(
+                          !mediaPlayer.shuffleModeEnabled);
+                    }
+                  : null,
               icon: Icon(
                 Icons.shuffle,
                 size: 24,
@@ -562,11 +639,31 @@ class _PlayerPageState extends State<PlayerPage> {
               ),
             ),
             AdaptiveIconButton(
-              onPressed: () {
-                mediaPlayer.player.seekToPrevious();
-              },
+              onPressed: hasSong
+                  ? () {
+                      mediaPlayer.previous();
+                    }
+                  : null,
               icon: Icon(
                 AdaptiveIcons.skip_previous,
+                size: 32,
+                color: Colors.white,
+              ),
+            ),
+            AdaptiveIconButton(
+              onPressed: hasSong
+                  ? () {
+                      final position = mediaPlayer.player.position;
+                      final target = position - const Duration(seconds: 10);
+                      mediaPlayer.player.seek(
+                        target < Duration.zero
+                            ? Duration.zero
+                            : target,
+                      );
+                    }
+                  : null,
+              icon: const Icon(
+                Icons.keyboard_double_arrow_left,
                 size: 32,
                 color: Colors.white,
               ),
@@ -584,9 +681,11 @@ class _PlayerPageState extends State<PlayerPage> {
                         child: LoadingIndicatorM3E());
                   }
                   return IconButton(
-                    onPressed: () {
-                      mediaPlayer.togglePlay();
-                    },
+                    onPressed: hasSong
+                        ? () {
+                            mediaPlayer.togglePlay();
+                          }
+                        : null,
                     icon: Icon(
                       value == ButtonState.playing
                           ? Icons.pause
@@ -599,9 +698,31 @@ class _PlayerPageState extends State<PlayerPage> {
               ),
             ),
             AdaptiveIconButton(
-              onPressed: () {
-                mediaPlayer.player.seekToNext();
-              },
+              onPressed: hasSong
+                  ? () {
+                      final position = mediaPlayer.player.position;
+                      final total = mediaPlayer.progressBarState.value.total;
+                      final target =
+                          position + const Duration(seconds: 10);
+                      mediaPlayer.player.seek(
+                        total > Duration.zero && target > total
+                            ? total
+                            : target,
+                      );
+                    }
+                  : null,
+              icon: const Icon(
+                Icons.keyboard_double_arrow_right,
+                size: 32,
+                color: Colors.white,
+              ),
+            ),
+            AdaptiveIconButton(
+              onPressed: hasSong
+                  ? () {
+                      mediaPlayer.next();
+                    }
+                  : null,
               icon: Icon(
                 AdaptiveIcons.skip_next,
                 size: 32,
@@ -612,9 +733,11 @@ class _PlayerPageState extends State<PlayerPage> {
                 valueListenable: mediaPlayer.loopMode,
                 builder: (context, value, child) {
                   return AdaptiveIconButton(
-                    onPressed: () {
-                      mediaPlayer.changeLoopMode();
-                    },
+                    onPressed: hasSong
+                        ? () {
+                            mediaPlayer.changeLoopMode();
+                          }
+                        : null,
                     icon: Icon(
                       value == LoopMode.off || value == LoopMode.all
                           ? AdaptiveIcons.repeat_all
@@ -663,6 +786,183 @@ class _NavButtonPlayer extends StatelessWidget {
           icon,
           size: 18,
           color: Colors.white.withValues(alpha: active ? 1.0 : 0.6),
+        ),
+      ),
+    );
+  }
+}
+
+class SpeedControlSheet extends StatefulWidget {
+  const SpeedControlSheet({super.key, required this.mediaPlayer});
+
+  final MediaPlayer mediaPlayer;
+
+  @override
+  State<SpeedControlSheet> createState() => _SpeedControlSheetState();
+}
+
+class _SpeedControlSheetState extends State<SpeedControlSheet> {
+  static const _presets = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+
+  late double _speed = widget.mediaPlayer.playbackSpeed;
+  late double _pitch = widget.mediaPlayer.pitch;
+
+  bool get _isModified =>
+      (_speed - 1.0).abs() > 0.001 || (_pitch - 1.0).abs() > 0.001;
+
+  void _reset() {
+    setState(() {
+      _speed = 1.0;
+      _pitch = 1.0;
+    });
+    widget.mediaPlayer.setPlaybackSpeed(1.0);
+    widget.mediaPlayer.setPitch(1.0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final labelStyle =
+        const TextStyle(color: Colors.white, fontWeight: FontWeight.w600);
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  "Playback speed",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: _isModified ? _reset : null,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(
+                          alpha: _isModified ? 0.1 : 0.05),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.restart_alt,
+                          size: 16,
+                          color: Colors.white.withValues(
+                              alpha: _isModified ? 1.0 : 0.4),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          "Reset",
+                          style: TextStyle(
+                            color: Colors.white.withValues(
+                                alpha: _isModified ? 1.0 : 0.4),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: _presets
+                  .map((preset) => GestureDetector(
+                        onTap: () {
+                          setState(() => _speed = preset);
+                          widget.mediaPlayer.setPlaybackSpeed(preset);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: (_speed - preset).abs() < 0.001
+                                ? Colors.white.withValues(alpha: 0.25)
+                                : Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '${preset}x',
+                            style: TextStyle(
+                              color: Colors.white.withValues(
+                                  alpha:
+                                      (_speed - preset).abs() < 0.001 ? 1.0 : 0.7),
+                            ),
+                          ),
+                        ),
+                      ))
+                  .toList(),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const Icon(Icons.speed, color: Colors.white70, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Slider(
+                    value: _speed.clamp(0.25, 2.0),
+                    min: 0.25,
+                    max: 2.0,
+                    divisions: 35,
+                    activeColor: Colors.white,
+                    inactiveColor: Colors.white.withValues(alpha: 0.2),
+                    onChanged: (v) {
+                      setState(() => _speed = v);
+                      widget.mediaPlayer.setPlaybackSpeed(v);
+                    },
+                  ),
+                ),
+                SizedBox(
+                  width: 48,
+                  child: Text(
+                    '${_speed.toStringAsFixed(2)}x',
+                    style: labelStyle,
+                  ),
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                const Icon(Icons.tune, color: Colors.white70, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Slider(
+                    value: _pitch.clamp(0.5, 2.0),
+                    min: 0.5,
+                    max: 2.0,
+                    divisions: 30,
+                    activeColor: Colors.white,
+                    inactiveColor: Colors.white.withValues(alpha: 0.2),
+                    onChanged: (v) {
+                      setState(() => _pitch = v);
+                      widget.mediaPlayer.setPitch(v);
+                    },
+                  ),
+                ),
+                SizedBox(
+                  width: 48,
+                  child: Text(
+                    _pitch == 1.0 ? '1.0' : _pitch.toStringAsFixed(2),
+                    style: labelStyle,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

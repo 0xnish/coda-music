@@ -71,7 +71,7 @@ class _SquareMiniPlayerState extends State<SquareMiniPlayer> {
                       _IconBtn(
                         icon: Icons.skip_previous_rounded,
                         size: 24,
-                        onTap: () => mediaPlayer.player.seekToPrevious(),
+                        onTap: () => mediaPlayer.previous(),
                       ),
                       ValueListenableBuilder(
                         valueListenable: mediaPlayer.buttonState,
@@ -102,7 +102,7 @@ class _SquareMiniPlayerState extends State<SquareMiniPlayer> {
                       _IconBtn(
                         icon: Icons.skip_next_rounded,
                         size: 24,
-                        onTap: () => mediaPlayer.player.seekToNext(),
+                        onTap: () => mediaPlayer.next(),
                       ),
                     ],
                   ),

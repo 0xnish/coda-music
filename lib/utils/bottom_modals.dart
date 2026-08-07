@@ -1,6 +1,5 @@
 ﻿import 'dart:io';
 import 'dart:math';
-import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:duration_picker/duration_picker.dart';
 import 'package:flutter/cupertino.dart';
@@ -863,7 +862,7 @@ class BottomModalLayout extends StatelessWidget {
       width: double.maxFinite,
       constraints: const BoxConstraints(maxWidth: 600),
       child: Material(
-        color: Color.fromARGB(245, 32, 32, 32),
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(16),
           topRight: Radius.circular(16),
@@ -934,15 +933,15 @@ class _GlassWindow extends StatelessWidget {
             maxHeight: MediaQuery.of(context).size.height * 0.8,
           ),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.white.withOpacity(0.12),
               width: 1,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.5),
+                color: Colors.black.withOpacity(0.6),
                 blurRadius: 30,
                 spreadRadius: 10,
                 offset: const Offset(0, 10),
@@ -951,9 +950,7 @@ class _GlassWindow extends StatelessWidget {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(20),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-              child: Column(
+            child: Column(
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -961,7 +958,7 @@ class _GlassWindow extends StatelessWidget {
                     decoration: BoxDecoration(
                       border: Border(
                         bottom: BorderSide(
-                          color: Colors.white.withOpacity(0.1),
+                          color: Colors.white.withOpacity(0.15),
                           width: 1,
                         ),
                       ),
@@ -994,10 +991,9 @@ class _GlassWindow extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
+      );
+    }
   }
-}
 
 class _AddToPlaylistContent extends StatelessWidget {
   final Map item;
@@ -1268,11 +1264,11 @@ class _TimerWindowContentState extends State<_TimerWindowContent> {
 
   Widget _buildPreset(Duration? duration, String label) {
     return Material(
-      color: Colors.white.withOpacity(0.1),
+      color: Theme.of(context).colorScheme.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        hoverColor: Colors.white.withOpacity(0.2),
+        hoverColor: Colors.white.withOpacity(0.1),
         onTap: () {
           if (duration != null) {
             context.read<MediaPlayer>().setTimer(duration);
@@ -1283,7 +1279,7 @@ class _TimerWindowContentState extends State<_TimerWindowContent> {
               initialTime: const Duration(minutes: 30),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(10),
-                color: const Color(0xFF2C2C2E),
+                color: const Color(0xFF3A3A3F),
               ),
             ).then((d) {
               if (d != null) {
@@ -1760,7 +1756,7 @@ class _CreatePlaylistWindowContentState
           children: [
              AdaptiveTextField(
                   onChanged: (value) => title = value,
-                  fillColor: Colors.white.withOpacity(0.1),
+                  fillColor: Theme.of(context).colorScheme.surfaceContainerHigh,
                   hintText: S.of(context).Playlist_Name,
                   prefix: const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1822,7 +1818,7 @@ class _ImportPlaylistWindowContentState
              AdaptiveTextField(
                   onChanged: (value) => title = value,
                   keyboardType: TextInputType.url,
-                   fillColor: Colors.white.withOpacity(0.1),
+                   fillColor: Theme.of(context).colorScheme.surfaceContainerHigh,
                   hintText: 'Spotify / YouTube / YTM Playlist URL',
                   prefix: const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),

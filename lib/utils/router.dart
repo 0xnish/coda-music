@@ -48,16 +48,23 @@ GoRouter router = GoRouter(
             final videoId = state.extra as String?;
             return CustomTransitionPage(
               key: state.pageKey,
+              opaque: false,
               child: PlayerPage(videoId: videoId),
+              transitionDuration: const Duration(milliseconds: 300),
+              reverseTransitionDuration: const Duration(milliseconds: 250),
               transitionsBuilder:
                   (context, animation, secondaryAnimation, child) {
-                const begin = Offset(0.0, 1.0);
-                const end = Offset.zero;
-                final curve = Curves.ease;
-                final tween = Tween(begin: begin, end: end)
-                    .chain(CurveTween(curve: curve));
+                final curved = CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOutCubic,
+                  reverseCurve: Curves.easeInCubic,
+                );
+                final tween = Tween(
+                  begin: const Offset(0.0, 1.0),
+                  end: Offset.zero,
+                );
                 return SlideTransition(
-                  position: animation.drive(tween),
+                  position: curved.drive(tween),
                   child: child,
                 );
               },

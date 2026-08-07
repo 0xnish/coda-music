@@ -321,7 +321,9 @@ class _FilterChips extends StatelessWidget {
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 8),
-        children: SearchType.values.map((type) {
+        children: SearchType.values
+            .where((type) => type != SearchType.all)
+            .map((type) {
           final isSelected = type == selectedType;
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2),

@@ -12,58 +12,64 @@ class QueueList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mediaPlayer = GetIt.I<MediaPlayer>();
-    final player = mediaPlayer.player;
 
-    return StreamBuilder(
-      stream: mediaPlayer.currentTrackStream,
-      builder: (context, snapshot) {
-        final sequence = snapshot.data?.sequence ?? [];
-        final currentIndex = snapshot.data?.currentIndex ?? 0;
+    return ListenableBuilder(
+      listenable: mediaPlayer,
+      builder: (context, _) {
+        return StreamBuilder(
+          stream: mediaPlayer.currentTrackStream,
+          builder: (context, snapshot) {
+            final sequence = snapshot.data?.sequence ?? [];
+            final currentIndex = snapshot.data?.currentIndex ?? 0;
 
-        if (sequence.isEmpty) return const SizedBox();
+            if (sequence.isEmpty) return const SizedBox();
 
-        final currentItem = currentIndex >= 0 && currentIndex < sequence.length
-            ? sequence[currentIndex]
-            : null;
+            final currentItem = currentIndex >= 0 && currentIndex < sequence.length
+                ? sequence[currentIndex]
+                : null;
 
-        return Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor.withAlpha(70),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
-              child: Column(
-                children: [
-                  _NowPlayingCard(currentItem: currentItem),
-                  Expanded(
-                    child: ScrollConfiguration(
-                      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
-                      child: ReorderableListView(
-                        padding: EdgeInsets.zero,
-                        onReorder: (oldIndex, newIndex) async {
-                          if (newIndex > oldIndex) newIndex -= 1;
-                          await player.moveAudioSource(oldIndex, newIndex);
-                        },
-                        children: [
-                          for (int i = 0; i < sequence.length; i++)
-                            QueueTile(
-                              key: ValueKey(sequence[i].tag?.id ?? '$i'),
-                              index: i,
-                              isCurrent: i == currentIndex,
-                              source: sequence[i],
-                            ),
-                          const SizedBox(height: 16, key: const ValueKey('bottom_spacer')),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+            return Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor.withAlpha(70),
+                borderRadius: BorderRadius.circular(16),
               ),
-            ),
-          ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
+                  child: Column(
+                    children: [
+                      _NowPlayingCard(currentItem: currentItem),
+                      Expanded(
+                        child: ScrollConfiguration(
+                          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                          child: ReorderableListView(
+                            padding: EdgeInsets.zero,
+                            onReorder: mediaPlayer.shuffleModeEnabled
+                                ? null
+                                : (oldIndex, newIndex) async {
+                                    if (newIndex > oldIndex) newIndex -= 1;
+                                    await mediaPlayer.reorderQueue(oldIndex, newIndex);
+                                  },
+                            children: [
+                              for (int i = 0; i < sequence.length; i++)
+                                QueueTile(
+                                  key: ValueKey(sequence[i].tag?.id ?? '$i'),
+                                  index: i,
+                                  isCurrent: i == currentIndex,
+                                  source: sequence[i],
+                                ),
+                              const SizedBox(height: 16, key: const ValueKey('bottom_spacer')),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -193,7 +199,6 @@ class _QueueTileState extends State<QueueTile> {
 
   @override
   Widget build(BuildContext context) {
-    final player = GetIt.I<MediaPlayer>().player;
     final MediaItem? song = widget.source.tag as MediaItem?;
 
     if (song == null) return const SizedBox();
@@ -229,7 +234,7 @@ class _QueueTileState extends State<QueueTile> {
             maxLines: 1,
           ),
           onTap: () {
-            player.seek(Duration.zero, index: widget.index);
+            GetIt.I<MediaPlayer>().playAt(widget.index);
           },
         ),
         ),

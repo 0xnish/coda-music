@@ -8,7 +8,7 @@ class LyricsService {
   static const _maxCacheSize = 30;
   final _cache = LinkedHashMap<String, Lyrics>();
 
-  static const _timeout = Duration(seconds: 45);
+  static const _timeout = Duration(seconds: 15);
 
   Future<Lyrics> getLyrics({
     required String title,
@@ -53,34 +53,31 @@ class LyricsService {
         : null;
     final useAlbum = (album != null && album.isNotEmpty && album != 'null') ? album : null;
 
-    final lrclibResult = await getLrclibLyrics(
-      title: title,
-      artist: useArtist,
-      album: useAlbum,
-      duration: durationSec,
-    ).timeout(_timeout);
+    final results = await Future.wait([
+      getLrclibLyrics(
+        title: title,
+        artist: useArtist,
+        album: useAlbum,
+        duration: durationSec,
+      ),
+      useArtist.isNotEmpty
+          ? getLyricaLyrics(
+              title: title,
+              artist: useArtist,
+              timestamps: true,
+            )
+          : Future<Lyrics?>.value(null),
+    ]).timeout(_timeout);
 
-    if (lrclibResult != null) {
-      if (lrclibResult.parsedLyrics != null) {
-        return lrclibResult;
-      }
+    final lrclibResult = results[0];
+    final lyricaResult = results[1];
+
+    if (lrclibResult != null && lrclibResult.parsedLyrics != null) {
+      return lrclibResult;
     }
-
-    if (useArtist.isNotEmpty) {
-      try {
-        final lyricaResult = await getLyricaLyrics(
-          title: title,
-          artist: useArtist,
-          timestamps: true,
-        ).timeout(_timeout);
-
-        if (lyricaResult != null) {
-          return lyricaResult;
-        }
-      } catch (e) {
-      }
+    if (lyricaResult != null) {
+      return lyricaResult;
     }
-
     if (lrclibResult != null) {
       return lrclibResult;
     }

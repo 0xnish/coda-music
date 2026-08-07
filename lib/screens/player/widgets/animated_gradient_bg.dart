@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 class AnimatedGradientBackground extends StatefulWidget {
   final List<Color> colors;
   final Duration animationDuration;
+  final bool paused;
 
   const AnimatedGradientBackground({
     super.key,
     required this.colors,
     this.animationDuration = const Duration(seconds: 8),
+    this.paused = false,
   });
 
   @override
@@ -20,6 +22,7 @@ class _AnimatedGradientBackgroundState extends State<AnimatedGradientBackground>
     with TickerProviderStateMixin {
   late AnimationController _controller;
   late AnimationController _colorController;
+  late final Listenable _merged;
 
   List<Color> _currentColors = [];
   List<Color> _targetColors = [];
@@ -27,7 +30,9 @@ class _AnimatedGradientBackgroundState extends State<AnimatedGradientBackground>
   @override
   void initState() {
     super.initState();
-    _currentColors = _getDefaultColors();
+    _currentColors = widget.colors.isNotEmpty
+        ? _expandColors(widget.colors)
+        : _getDefaultColors();
     _targetColors = _currentColors;
 
     _controller = AnimationController(
@@ -39,6 +44,8 @@ class _AnimatedGradientBackgroundState extends State<AnimatedGradientBackground>
       duration: const Duration(milliseconds: 800),
       vsync: this,
     );
+
+    _merged = Listenable.merge([_controller, _colorController]);
   }
 
   List<Color> _getDefaultColors() {
@@ -53,11 +60,24 @@ class _AnimatedGradientBackgroundState extends State<AnimatedGradientBackground>
   @override
   void didUpdateWidget(AnimatedGradientBackground oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.colors != oldWidget.colors && widget.colors.isNotEmpty) {
+    if (widget.colors.isNotEmpty &&
+        !_sameColors(widget.colors, oldWidget.colors)) {
       _currentColors = _targetColors;
       _targetColors = _expandColors(widget.colors);
-      _colorController.forward(from: 0);
+      if (widget.paused) {
+        _currentColors = _targetColors;
+      } else {
+        _colorController.forward(from: 0);
+      }
     }
+  }
+
+  bool _sameColors(List<Color> a, List<Color> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   List<Color> _expandColors(List<Color> colors) {
@@ -93,7 +113,7 @@ class _AnimatedGradientBackgroundState extends State<AnimatedGradientBackground>
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: Listenable.merge([_controller, _colorController]),
+      animation: widget.paused ? const AlwaysStoppedAnimation(0) : _merged,
       builder: (context, child) {
         final t = _colorController.value;
         final colors = List.generate(
@@ -105,12 +125,14 @@ class _AnimatedGradientBackgroundState extends State<AnimatedGradientBackground>
           ),
         );
 
-        return CustomPaint(
-          painter: _GradientPainter(
-            colors: colors,
-            animation: _controller.value,
+        return ClipRect(
+          child: CustomPaint(
+            painter: _GradientPainter(
+              colors: colors,
+              animation: _controller.value,
+            ),
+            size: Size.infinite,
           ),
-          size: Size.infinite,
         );
       },
     );

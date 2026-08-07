@@ -1,23 +1,23 @@
 [Setup]
-AppName=CODA MUSIC
-AppVersion=1.0.0
-AppVerName=CODA MUSIC 1.0.0
+AppName=Coda Music
+AppVersion=2.5.0
+AppVerName=Coda Music 2.5.0
 AppPublisher=coder-nishanth
 AppPublisherURL=https://github.com/coder-nishanth/coda-music
-DefaultDirName={autopf}\CODA MUSIC
-DefaultGroupName=CODA MUSIC
+DefaultDirName={autopf}\Coda Music
+DefaultGroupName=Coda Music
 UninstallDisplayIcon={app}\coda-music.exe
-UninstallDisplayName=CODA MUSIC
+UninstallDisplayName=Coda Music
 Compression=lzma2
 SolidCompression=yes
 OutputDir=..\installers
-OutputBaseFilename=coda-music-Setup-1.0.0
+OutputBaseFilename=coda-music-Setup-2.5.0
 SetupIconFile=runner\resources\app_icon.ico
-VersionInfoVersion=1.0.0.0
+VersionInfoVersion=2.5.0.0
 VersionInfoCompany=coder-nishanth
-VersionInfoDescription=CODA MUSIC Installer
-VersionInfoProductName=CODA MUSIC
-VersionInfoProductVersion=1.0.0
+VersionInfoDescription=Coda Music Installer
+VersionInfoProductName=Coda Music
+VersionInfoProductVersion=2.5.0
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 
@@ -25,8 +25,8 @@ PrivilegesRequiredOverridesAllowed=dialog
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 
 [Icons]
-Name: "{group}\CODA MUSIC"; Filename: "{app}\coda-music.exe"; IconFilename: "{app}\coda-music.exe"
-Name: "{group}\Uninstall CODA MUSIC"; Filename: "{uninstallexe}"
+Name: "{group}\Coda Music"; Filename: "{app}\coda-music.exe"; IconFilename: "{app}\coda-music.exe"
+Name: "{group}\Uninstall Coda Music"; Filename: "{uninstallexe}"
 
 [Run]
-Filename: "{app}\coda-music.exe"; Description: "Launch CODA MUSIC"; Flags: postinstall nowait skipifsilent
+Filename: "{app}\coda-music.exe"; Description: "Launch Coda Music"; Flags: postinstall nowait skipifsilent
