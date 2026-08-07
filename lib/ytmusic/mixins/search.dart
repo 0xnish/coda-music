@@ -8,7 +8,7 @@ mixin SearchMixin on YTClient {
       {bool detailedRuns = false}) async {
     if (query == '') {
       return searchHistory()
-          .map((el) => {
+          .map((el) => <String, dynamic>{
                 'type': 'TEXT',
                 'query': el,
                 'isHistory': true,
@@ -20,7 +20,7 @@ mixin SearchMixin on YTClient {
     List<Map<String, dynamic>> suggestions = searchHistory()
         .where((el) => el.toLowerCase().contains(query.toLowerCase()))
         .toList()
-        .map((el) => {
+        .map((el) => <String, dynamic>{
               'type': 'TEXT',
               'query': el,
               'isHistory': true,

@@ -4,6 +4,19 @@ All notable changes to CODA MUSIC will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.5.0] - 2026-08-07
+
+### Fixed
+- Search suggestions not loading (typed map-list mismatch caused a runtime cast error)
+- Lyrics timeout regression — LRCLib is now a fast path and no longer blocked by a slow Lyrica instance
+- Slow-network playback auto-retry
+- Search history ordering
+- Miniplayer progress bar lag by seeking only on drag end
+
+### Improved
+- Background isolate for smooth animations
+- Installer branding
+
 ## [2.2.0] - 2026-07-17
 
 ### Fixed

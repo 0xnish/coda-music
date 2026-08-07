@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:collection';
 import '../models/lyrics_model.dart';
 import 'providers/lrclib_provider.dart';
@@ -7,8 +6,6 @@ import 'providers/lyrica_provider.dart';
 class LyricsService {
   static const _maxCacheSize = 30;
   final _cache = LinkedHashMap<String, Lyrics>();
-
-  static const _timeout = Duration(seconds: 15);
 
   Future<Lyrics> getLyrics({
     required String title,
@@ -53,31 +50,34 @@ class LyricsService {
         : null;
     final useAlbum = (album != null && album.isNotEmpty && album != 'null') ? album : null;
 
-    final results = await Future.wait([
-      getLrclibLyrics(
-        title: title,
-        artist: useArtist,
-        album: useAlbum,
-        duration: durationSec,
-      ),
-      useArtist.isNotEmpty
-          ? getLyricaLyrics(
-              title: title,
-              artist: useArtist,
-              timestamps: true,
-            )
-          : Future<Lyrics?>.value(null),
-    ]).timeout(_timeout);
-
-    final lrclibResult = results[0];
-    final lyricaResult = results[1];
+    final lrclibResult = await getLrclibLyrics(
+      title: title,
+      artist: useArtist,
+      album: useAlbum,
+      duration: durationSec,
+    ).timeout(
+      const Duration(seconds: 20),
+      onTimeout: () => null,
+    );
 
     if (lrclibResult != null && lrclibResult.parsedLyrics != null) {
       return lrclibResult;
     }
-    if (lyricaResult != null) {
-      return lyricaResult;
+
+    if (useArtist.isNotEmpty) {
+      final lyricaResult = await getLyricaLyrics(
+        title: title,
+        artist: useArtist,
+        timestamps: true,
+      ).timeout(
+        const Duration(seconds: 45),
+        onTimeout: () => null,
+      );
+      if (lyricaResult != null) {
+        return lyricaResult;
+      }
     }
+
     if (lrclibResult != null) {
       return lrclibResult;
     }
