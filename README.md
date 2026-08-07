@@ -63,6 +63,7 @@ streaming, local playback, lyrics, and chart discovery — all in one beautiful 
     </tr>
     <tr>
       <td><img src="screenshots/11.png" alt="Keyboard Shortcuts" width="350"/></td>
+      <td><img src="screenshots/12.png" alt="Screenshot 12" width="350"/></td>
     </tr>
   </table>
 </div>
