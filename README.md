@@ -51,6 +51,18 @@ streaming, local playback, lyrics, and chart discovery — all in one beautiful 
 
 ![Settings](screenshots/5.png)
 
+![Search](screenshots/6.png)
+
+![Queue](screenshots/7.png)
+
+![Equalizer](screenshots/8.png)
+
+![Spotify Import](screenshots/9.png)
+
+![Home](screenshots/10.png)
+
+![Keyboard Shortcuts](screenshots/11.png)
+
 </div>
 
 <br>
