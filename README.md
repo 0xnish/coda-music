@@ -40,17 +40,31 @@ streaming, local playback, lyrics, and chart discovery — all in one beautiful 
 ## 📸 Screenshots
 
 <div align="center">
-  <img src="screenshots/1.png" alt="Player" width="150"/>
-  <img src="screenshots/2.png" alt="Lyrics" width="150"/>
-  <img src="screenshots/3.png" alt="Charts" width="150"/>
-  <img src="screenshots/4.png" alt="Library" width="150"/>
-  <img src="screenshots/5.png" alt="Settings" width="150"/>
-  <img src="screenshots/6.png" alt="Search" width="150"/>
-  <img src="screenshots/7.png" alt="Queue" width="150"/>
-  <img src="screenshots/8.png" alt="Equalizer" width="150"/>
-  <img src="screenshots/9.png" alt="Spotify Import" width="150"/>
-  <img src="screenshots/10.png" alt="Home" width="150"/>
-  <img src="screenshots/11.png" alt="Keyboard Shortcuts" width="150"/>
+  <table>
+    <tr>
+      <td><img src="screenshots/1.png" alt="Player" width="350"/></td>
+      <td><img src="screenshots/2.png" alt="Lyrics" width="350"/></td>
+    </tr>
+    <tr>
+      <td><img src="screenshots/3.png" alt="Charts" width="350"/></td>
+      <td><img src="screenshots/4.png" alt="Library" width="350"/></td>
+    </tr>
+    <tr>
+      <td><img src="screenshots/5.png" alt="Settings" width="350"/></td>
+      <td><img src="screenshots/6.png" alt="Search" width="350"/></td>
+    </tr>
+    <tr>
+      <td><img src="screenshots/7.png" alt="Queue" width="350"/></td>
+      <td><img src="screenshots/8.png" alt="Equalizer" width="350"/></td>
+    </tr>
+    <tr>
+      <td><img src="screenshots/9.png" alt="Spotify Import" width="350"/></td>
+      <td><img src="screenshots/10.png" alt="Home" width="350"/></td>
+    </tr>
+    <tr>
+      <td><img src="screenshots/11.png" alt="Keyboard Shortcuts" width="350"/></td>
+    </tr>
+  </table>
 </div>
 
 <br>
