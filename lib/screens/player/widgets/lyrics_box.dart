@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:get_it/get_it.dart';
 import 'package:Coda/models/lyrics_model.dart';
 import 'package:Coda/services/lyrics.dart';
 import 'package:Coda/services/media_player.dart';
+import 'package:just_audio/just_audio.dart' show ProcessingState;
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:loading_indicator_m3e/loading_indicator_m3e.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -90,38 +90,26 @@ class _LyricsBoxState extends State<LyricsBox> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor.withAlpha(70),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Center(
-              child: _fetchLyricsFuture != null
-                  ? FutureBuilder<Lyrics>(
-                      future: _fetchLyricsFuture,
-                      builder: (context, snapshot) {
-                        if (snapshot.hasData) {
-                          if (snapshot.data == null) {
-                            return const Text('No Lyrics Found (Null)');
-                          }
-                          return LoadedLyricsWidget(lyrics: snapshot.data!);
-                        }
-                        if (snapshot.hasError) {
-                          return const Text('No Lyrics Found');
-                        }
-                        return const ExpressiveLoadingIndicator();
-                      },
-                    )
-                  : const ExpressiveLoadingIndicator(),
-            ),
-          ),
-        ),
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: _fetchLyricsFuture != null
+            ? FutureBuilder<Lyrics>(
+                future: _fetchLyricsFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.hasData) {
+                    if (snapshot.data == null) {
+                      return const Text('No Lyrics Found (Null)');
+                    }
+                    return LoadedLyricsWidget(lyrics: snapshot.data!);
+                  }
+                  if (snapshot.hasError) {
+                    return const Text('No Lyrics Found');
+                  }
+                  return const ExpressiveLoadingIndicator();
+                },
+              )
+            : const ExpressiveLoadingIndicator(),
       ),
     );
   }
@@ -200,11 +188,12 @@ class SyncedLyricsWidget extends StatefulWidget {
 
 class _SyncedLyricsWidgetState extends State<SyncedLyricsWidget> {
   StreamSubscription? _streamSubscription;
+  StreamSubscription? _processingStateSub;
   final ItemScrollController _itemScrollController = ItemScrollController();
   final ItemPositionsListener _itemPositionsListener =
       ItemPositionsListener.create();
   Duration duration = Duration.zero;
-  int _currentLyricIndex = 0;
+  int _currentLyricIndex = -1;
   bool _initialScrollDone = false;
   
   bool _isUserScrolling = false;
@@ -214,9 +203,26 @@ class _SyncedLyricsWidgetState extends State<SyncedLyricsWidget> {
     super.initState();
 
     try {
+      _processingStateSub = GetIt.I<MediaPlayer>()
+          .player
+          .processingStateStream
+          .listen((processingState) {
+        if (!mounted) return;
+        if (processingState == ProcessingState.loading) {
+          setState(() {
+            _currentLyricIndex = -1;
+          });
+        }
+      });
+    } catch (e) {
+    }
+
+    try {
       _streamSubscription =
           GetIt.I<MediaPlayer>().player.positionStream.listen((event) {
         if (!mounted) return;
+        final player = GetIt.I<MediaPlayer>().player;
+        if (player.processingState == ProcessingState.loading) return;
         duration = event;
         final newIndex = _findCurrentLyricIndex();
 
@@ -239,12 +245,23 @@ class _SyncedLyricsWidgetState extends State<SyncedLyricsWidget> {
   }
 
   @override
+  void didUpdateWidget(covariant SyncedLyricsWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(widget.lyrics, oldWidget.lyrics)) {
+      _currentLyricIndex = -1;
+      _initialScrollDone = false;
+    }
+  }
+
+  @override
   void dispose() {
     _streamSubscription?.cancel();
+    _processingStateSub?.cancel();
     super.dispose();
   }
 
   void _scrollToCurrentLyric(int index) {
+    if (index < 0) return;
     if (_itemScrollController.isAttached && !_isUserScrolling) {
       _itemScrollController.scrollTo(
         index: index,
@@ -275,12 +292,16 @@ class _SyncedLyricsWidgetState extends State<SyncedLyricsWidget> {
   }
 
   int _findCurrentLyricIndex() {
-    if (widget.lyrics.parsedLyrics == null) return 0;
+    if (widget.lyrics.parsedLyrics == null) return -1;
 
     final lines = widget.lyrics.parsedLyrics!.lyrics;
+    if (lines.isEmpty) return -1;
+    if (duration.inMilliseconds < lines.first.start.inMilliseconds) {
+      return -1;
+    }
     for (int i = 0; i < lines.length; i++) {
       if (lines[i].start.inMilliseconds > duration.inMilliseconds) {
-        return i > 0 ? i - 1 : 0;
+        return i - 1;
       }
     }
     return lines.length - 1;
@@ -293,7 +314,10 @@ class _SyncedLyricsWidgetState extends State<SyncedLyricsWidget> {
   void _seekToLyric(int index) {
     if (widget.lyrics.parsedLyrics == null) return;
     final lyric = widget.lyrics.parsedLyrics!.lyrics[index];
-    GetIt.I<MediaPlayer>().player.seek(lyric.start);
+    GetIt.I<MediaPlayer>().seekTo(lyric.start);
+    setState(() {
+      _currentLyricIndex = index;
+    });
     _scrollToCurrentLyric(index);
   }
 

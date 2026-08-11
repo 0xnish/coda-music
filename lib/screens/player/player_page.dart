@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:Coda/core/widgets/squiggly_progress_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -39,8 +40,7 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _gradientPaused = false;
   bool _routeSettled = false;
   late MediaItem? currentSong;
-  bool _showLyrics = false;
-
+  _PlayerPanel _panel = _PlayerPanel.queue;
 
   @override
   void initState() {
@@ -84,6 +84,43 @@ class _PlayerPageState extends State<PlayerPage> {
     GetIt.I<MediaPlayer>().currentSongNotifier.removeListener(songListener);
     super.dispose();
   }
+
+  Widget _buildAlbumArtFace() {
+    return GestureDetector(
+      onTap: () => GetIt.I<MediaPlayer>().togglePlay(),
+      child: currentSong == null
+          ? Container(
+              color: Colors.white.withValues(alpha: 0.08),
+            )
+          : SongThumbnail(
+              song: currentSong!.extras!,
+              fit: BoxFit.cover,
+              onImageReady: updateBackgroundColor,
+            ),
+    );
+  }
+
+  Widget _cardShell({required Widget child}) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.4),
+            blurRadius: 20,
+            spreadRadius: 5,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _buildAlbumCard() => _cardShell(child: _buildAlbumArtFace());
 
   void songListener() {
     if (currentSong != GetIt.I<MediaPlayer>().currentSongNotifier.value) {
@@ -179,295 +216,237 @@ class _PlayerPageState extends State<PlayerPage> {
         ),
       ),
       child: WillPopScope(
-          onWillPop: () async {
-            return true;
-          },
-          child: Scaffold(
-                key: _key,
-                backgroundColor: Colors.black,
-                body: Focus(
-                  autofocus: true,
-                  onKeyEvent: (node, event) {
-                    if (event is KeyDownEvent &&
-                        event.logicalKey == LogicalKeyboardKey.escape) {
-                      context.pop();
-                      return KeyEventResult.handled;
-                    }
-                    return KeyEventResult.ignored;
-                  },
-                  child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: _gradientPaused
-                          ? const SizedBox.shrink()
-                          : AnimatedGradientBackground(
-                              paused: !_routeSettled,
-                              colors: paletteColors.isNotEmpty
-                                  ? paletteColors
-                                  : [
-                                      Colors.deepPurple.shade900,
-                                      Colors.deepPurple.shade700,
-                                      Colors.purple.shade800,
-                                      Colors.indigo.shade900,
-                                    ],
-                            ),
-                    ),
-
-                      SafeArea(
-                        child: Column(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                              child: Row(
-                                children: [
-                                  GestureDetector(
-                                    onTap: () => context.pop(),
-                                    child: Container(
-                                      width: 36,
-                                      height: 30,
-                                      alignment: Alignment.center,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withValues(alpha: 0.08),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Icon(
-                                        Icons.arrow_back,
-                                        size: 18,
-                                        color: Colors.white.withValues(alpha: 0.7),
-                                      ),
-                                    ),
-                                  ),
+        onWillPop: () async {
+          return true;
+        },
+        child: Scaffold(
+          key: _key,
+          backgroundColor: Colors.black,
+          body: Focus(
+            autofocus: true,
+            onKeyEvent: (node, event) {
+              if (event is KeyDownEvent &&
+                  event.logicalKey == LogicalKeyboardKey.escape) {
+                context.pop();
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            },
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: _gradientPaused
+                      ? const SizedBox.shrink()
+                      : AnimatedGradientBackground(
+                          paused: !_routeSettled,
+                          colors: paletteColors.isNotEmpty
+                              ? paletteColors
+                              : [
+                                  Colors.deepPurple.shade900,
+                                  Colors.deepPurple.shade700,
+                                  Colors.purple.shade800,
+                                  Colors.indigo.shade900,
                                 ],
+                        ),
+                ),
+                SafeArea(
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                        child: Row(
+                          children: [
+                            GestureDetector(
+                              onTap: () => context.pop(),
+                              child: Container(
+                                width: 36,
+                                height: 30,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  Icons.arrow_back,
+                                  size: 18,
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                ),
                               ),
                             ),
-                          Expanded(
-                            child: LayoutBuilder(
-                              builder: (context, constraints) {
-                                bool isWide = constraints.maxWidth > 800;
-                                if (isWide) {
-                                  return Stack(
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            bool isWide = constraints.maxWidth > 800;
+                            if (isWide) {
+                              return Stack(
+                                children: [
+                                  Column(
                                     children: [
-                                      Column(
+                                      Row(
                                         children: [
-                                          Row(
-                                            children: [
-                                              Expanded(flex: 5, child: const SizedBox()),
-                                              Expanded(
-                                                flex: 6,
-                                                child: Center(
-                                                  child: Row(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    children: [
-                                                      _NavButtonPlayer(
-                                                        icon: AdaptiveIcons.queue,
-                                                        active: !_showLyrics,
-                                                        onTap: () {
-                                                          setState(() {
-                                                            _showLyrics = false;
-                                                          });
-                                                        },
-                                                      ),
-                                                      const SizedBox(width: 4),
-                                                      _NavButtonPlayer(
-                                                        icon: Icons.lyrics_outlined,
-                                                        active: _showLyrics,
-                                                        onTap: () {
-                                                          setState(() {
-                                                            _showLyrics = true;
-                                                          });
-                                                        },
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 12),
                                           Expanded(
-                                            child: Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: [
-                                                Expanded(
-                                                  flex: 5,
-                                                  child: Center(
-                                                    child: Container(
-                                                      constraints: const BoxConstraints(
-                                                          maxWidth: double.infinity),
-                                                      padding:
-                                                          const EdgeInsets.all(40.0),
-                                                      child: Column(
-                                                        mainAxisAlignment:
-                                                            MainAxisAlignment.center,
-                                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                                        children: [
-                                                          Expanded(
-                                                            child: Center(
-                                                              child: AspectRatio(
-                                                                aspectRatio: 1,
-                                                                child: Container(
-                                                                  decoration:
-                                                                      BoxDecoration(
-                                                                    borderRadius:
-                                                                        BorderRadius
-                                                                            .circular(
-                                                                                12),
-                                                                    boxShadow: [
-                                                                      BoxShadow(
-                                                                        color: Colors
-                                                                            .black
-                                                                            .withValues(
-                                                                                alpha:
-                                                                                    0.4),
-                                                                        blurRadius:
-                                                                            20,
-                                                                        spreadRadius:
-                                                                            5,
-                                                                        offset:
-                                                                            const Offset(
-                                                                                0,
-                                                                                10),
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                                  child: GestureDetector(
-                                                                    onTap: () {
-                                                                      GetIt.I<MediaPlayer>().togglePlay();
-                                                                    },
-                                                                    child: ClipRRect(
-                                                                      borderRadius:
-                                                                          BorderRadius
-                                                                              .circular(
-                                                                                  12),
-                                                                      child:
-                                                                          currentSong ==
-                                                                              null
-                                                                              ? Container(
-                                                                                  color: Colors
-                                                                                      .white
-                                                                                      .withValues(alpha: 0.08),
-                                                                                )
-                                                                              : SongThumbnail(
-                                                                                  song: currentSong!
-                                                                                      .extras!,
-                                                                                  fit: BoxFit
-                                                                                      .cover,
-                                                                                  onImageReady:
-                                                                                      updateBackgroundColor,
-                                                                                ),
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ),
-                                                          const SizedBox(height: 8),
-                                                          _buildTitleAndControls(
-                                                              context,
-                                                              centered: false),
-                                                        ],
-                                                      ),
-                                                    ),
+                                              flex: 5, child: const SizedBox()),
+                                          Expanded(
+                                            flex: 6,
+                                            child: Center(
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  _NavButtonPlayer(
+                                                    icon: AdaptiveIcons.queue,
+                                                    active: _panel ==
+                                                        _PlayerPanel.queue,
+                                                    onTap: () {
+                                                      setState(() {
+                                                        _panel =
+                                                            _PlayerPanel.queue;
+                                                      });
+                                                    },
                                                   ),
-                                                ),
-                                                Expanded(
-                                                  flex: 6,
-                                                  child: Padding(
-                                                    padding:
-                                                        const EdgeInsets.all(40.0),
-                                                    child: _showLyrics &&
-                                                            currentSong != null
-                                                        ? LyricsBox(
-                                                            key: ValueKey(currentSong!.id),
-                                                            currentSong: currentSong!,
-                                                            size: Size(
-                                                                constraints.maxWidth / 2,
-                                                                constraints.maxHeight),
-                                                            onLyricsFound: (_) {},
-                                                          )
-                                                        : const QueueList(),
+                                                  const SizedBox(width: 4),
+                                                  _NavButtonPlayer(
+                                                    icon: Icons.lyrics_outlined,
+                                                    active: _panel ==
+                                                        _PlayerPanel.lyrics,
+                                                    onTap: () {
+                                                      setState(() {
+                                                        _panel =
+                                                            _PlayerPanel.lyrics;
+                                                      });
+                                                    },
                                                   ),
-                                                ),
-                                              ],
+                                                ],
+                                              ),
                                             ),
                                           ),
                                         ],
                                       ),
-                                    ],
-                                  );
-                                 } else {
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 24.0),
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceEvenly,
-                                      children: [
-                                        Expanded(
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(20.0),
-                                            child: Container(
-                                              decoration: BoxDecoration(
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: Colors.black
-                                                        .withValues(alpha: 0.4),
-                                                    blurRadius: 20,
-                                                    spreadRadius: 5,
-                                                    offset: const Offset(0, 10),
-                                                  ),
-                                                ],
-                                              ),
-                                              child: GestureDetector(
-                                                onTap: () {
-                                                  GetIt.I<MediaPlayer>().togglePlay();
-                                                },
-                                                child: ClipRRect(
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                  child: currentSong == null
-                                                      ? Container(
-                                                          color: Colors.white
-                                                              .withValues(
-                                                                  alpha: 0.08),
-                                                        )
-                                                      : SongThumbnail(
-                                                          song: currentSong!
-                                                              .extras!,
-                                                          fit: BoxFit.cover,
-                                                          onImageReady:
-                                                              updateBackgroundColor,
+                                      const SizedBox(height: 12),
+                                      Expanded(
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Expanded(
+                                              flex: 5,
+                                              child: Center(
+                                                child: Container(
+                                                  constraints:
+                                                      const BoxConstraints(
+                                                          maxWidth:
+                                                              double.infinity),
+                                                  padding: const EdgeInsets.all(
+                                                      40.0),
+                                                  child: Column(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Expanded(
+                                                        child: Center(
+                                                          child: AspectRatio(
+                                                            aspectRatio: 1,
+                                                            child:
+                                                                _buildAlbumCard(),
+                                                          ),
                                                         ),
+                                                      ),
+                                                      const SizedBox(height: 8),
+                                                      _buildTitleAndControls(
+                                                          context,
+                                                          centered: false,
+                                                          isWide: true),
+                                                    ],
+                                                  ),
                                                 ),
                                               ),
                                             ),
-                                          ),
+                                            Expanded(
+                                              flex: 6,
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.all(40.0),
+                                                child: _BlurPanel(
+                                                  child: IndexedStack(
+                                                    index: _panel ==
+                                                                _PlayerPanel
+                                                                    .lyrics &&
+                                                            currentSong != null
+                                                        ? 0
+                                                        : 1,
+                                                    children: [
+                                                      if (currentSong != null)
+                                                        LyricsBox(
+                                                          key: ValueKey(
+                                                              currentSong!.id),
+                                                          currentSong:
+                                                              currentSong!,
+                                                          size: Size(
+                                                              constraints
+                                                                      .maxWidth /
+                                                                  2,
+                                                              constraints
+                                                                  .maxHeight),
+                                                          onLyricsFound: (_) {},
+                                                        )
+                                                      else
+                                                        const SizedBox.shrink(),
+                                                      const QueueList(),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                        const SizedBox(height: 4),
-                                        _buildTitleAndControls(context),
-                                        const SizedBox(height: 20),
-                                      ],
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              );
+                            } else {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 24.0),
+                                child: Column(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceEvenly,
+                                  children: [
+                                    Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(20.0),
+                                        child: _buildAlbumCard(),
+                                      ),
                                     ),
-                                  );
-                                }
-                              },
-                            ),
-                          ),
-                        ],
+                                    const SizedBox(height: 4),
+                                    _buildTitleAndControls(context),
+                                    const SizedBox(height: 20),
+                                  ],
+                                ),
+                              );
+                            }
+                          },
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
+        ),
+      ),
     );
   }
 
-  Widget _buildTitleAndControls(BuildContext context, {bool centered = false}) {
+  Widget _buildTitleAndControls(BuildContext context,
+      {bool centered = false, bool isWide = false}) {
     MediaPlayer mediaPlayer = context.watch<MediaPlayer>();
     final bool hasSong = currentSong != null;
     return Column(
@@ -538,8 +517,7 @@ class _PlayerPageState extends State<PlayerPage> {
                               },
                             );
                           } else {
-                            await value.delete(
-                                currentSong!.extras!['videoId']);
+                            await value.delete(currentSong!.extras!['videoId']);
                           }
                         }
                       : null,
@@ -597,9 +575,7 @@ class _PlayerPageState extends State<PlayerPage> {
             ),
           ],
         ),
-
         const SizedBox(height: 30),
-
         ValueListenableBuilder(
           valueListenable: mediaPlayer.progressBarState,
           builder: (context, ProgressBarState value, child) {
@@ -614,12 +590,11 @@ class _PlayerPageState extends State<PlayerPage> {
               progressColor: Colors.white,
               thumbColor: Colors.white,
               timeLabelTextStyle: const TextStyle(color: Colors.white),
-              onSeek: (value) => mediaPlayer.player.seek(value),
+              onSeek: (value) => mediaPlayer.seekTo(value),
             );
           },
         ),
         const SizedBox(height: 20),
-
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -655,10 +630,8 @@ class _PlayerPageState extends State<PlayerPage> {
                   ? () {
                       final position = mediaPlayer.player.position;
                       final target = position - const Duration(seconds: 10);
-                      mediaPlayer.player.seek(
-                        target < Duration.zero
-                            ? Duration.zero
-                            : target,
+                      mediaPlayer.seekTo(
+                        target < Duration.zero ? Duration.zero : target,
                       );
                     }
                   : null,
@@ -671,14 +644,13 @@ class _PlayerPageState extends State<PlayerPage> {
             Container(
               height: 64,
               width: 64,
-              decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(50)),
+              decoration:
+                  BoxDecoration(borderRadius: BorderRadius.circular(50)),
               child: ValueListenableBuilder(
                 valueListenable: mediaPlayer.buttonState,
                 builder: (context, ButtonState value, child) {
                   if (value == ButtonState.loading) {
-                    return const Center(
-                        child: LoadingIndicatorM3E());
+                    return const Center(child: LoadingIndicatorM3E());
                   }
                   return IconButton(
                     onPressed: hasSong
@@ -702,9 +674,8 @@ class _PlayerPageState extends State<PlayerPage> {
                   ? () {
                       final position = mediaPlayer.player.position;
                       final total = mediaPlayer.progressBarState.value.total;
-                      final target =
-                          position + const Duration(seconds: 10);
-                      mediaPlayer.player.seek(
+                      final target = position + const Duration(seconds: 10);
+                      mediaPlayer.seekTo(
                         total > Duration.zero && target > total
                             ? total
                             : target,
@@ -792,6 +763,29 @@ class _NavButtonPlayer extends StatelessWidget {
   }
 }
 
+class _BlurPanel extends StatelessWidget {
+  const _BlurPanel({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor.withAlpha(70),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
 class SpeedControlSheet extends StatefulWidget {
   const SpeedControlSheet({super.key, required this.mediaPlayer});
 
@@ -845,11 +839,11 @@ class _SpeedControlSheetState extends State<SpeedControlSheet> {
                 GestureDetector(
                   onTap: _isModified ? _reset : null,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(
-                          alpha: _isModified ? 0.1 : 0.05),
+                      color: Colors.white
+                          .withValues(alpha: _isModified ? 0.1 : 0.05),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Row(
@@ -858,15 +852,15 @@ class _SpeedControlSheetState extends State<SpeedControlSheet> {
                         Icon(
                           Icons.restart_alt,
                           size: 16,
-                          color: Colors.white.withValues(
-                              alpha: _isModified ? 1.0 : 0.4),
+                          color: Colors.white
+                              .withValues(alpha: _isModified ? 1.0 : 0.4),
                         ),
                         const SizedBox(width: 4),
                         Text(
                           "Reset",
                           style: TextStyle(
-                            color: Colors.white.withValues(
-                                alpha: _isModified ? 1.0 : 0.4),
+                            color: Colors.white
+                                .withValues(alpha: _isModified ? 1.0 : 0.4),
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
@@ -899,8 +893,9 @@ class _SpeedControlSheetState extends State<SpeedControlSheet> {
                             '${preset}x',
                             style: TextStyle(
                               color: Colors.white.withValues(
-                                  alpha:
-                                      (_speed - preset).abs() < 0.001 ? 1.0 : 0.7),
+                                  alpha: (_speed - preset).abs() < 0.001
+                                      ? 1.0
+                                      : 0.7),
                             ),
                           ),
                         ),
@@ -968,3 +963,5 @@ class _SpeedControlSheetState extends State<SpeedControlSheet> {
     );
   }
 }
+
+enum _PlayerPanel { queue, lyrics }

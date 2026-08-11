@@ -183,7 +183,7 @@ class _BottomPlayerState extends State<BottomPlayer> {
                                       setState(() => _dragMs = v.round());
                                     },
                                     onChangeEnd: (v) {
-                                      mediaPlayer.player.seek(
+                                      mediaPlayer.seekTo(
                                           Duration(milliseconds: v.round()));
                                       setState(() => _dragMs = null);
                                     },

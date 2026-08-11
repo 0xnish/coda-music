@@ -6,6 +6,7 @@ import 'package:get_it/get_it.dart';
 import 'package:Coda/services/equalizer_service.dart';
 import 'package:Coda/services/innertube_player.dart';
 import 'package:Coda/services/yt_audio_stream.dart';
+import 'package:Coda/services/blocked_songs.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:rxdart/rxdart.dart';
@@ -55,7 +56,12 @@ class MediaPlayer extends ChangeNotifier {
       BehaviorSubject.seeded([]);
   final BehaviorSubject<int?> _indexSubject = BehaviorSubject.seeded(null);
 
-  Future<void> _switchOp = Future.value();
+  int _switchSeq = 0;
+  bool _progressBarLocked = false;
+  bool _switching = false;
+  bool _userSeeking = false;
+  Duration? _bufferingResume;
+  String? _bufferingResumeId;
 
   bool _handlingCompletion = false;
   String? _lastCompletionSongId;
@@ -181,6 +187,21 @@ class MediaPlayer extends ChangeNotifier {
     _loadingTimeoutTimer = null;
   }
 
+  void _resetProgressBar() {
+    _progressBarState.value = ProgressBarState();
+  }
+
+  Future<void> _restorePosition(Duration resume) async {
+    // Keep the bar frozen while the player's position is restored so a stale
+    // (reset) position never overwrites the frozen thumb.
+    try {
+      await _player.seek(resume);
+    } catch (e) {
+      debugPrint('Restore seek failed: $e');
+    }
+    _progressBarLocked = false;
+  }
+
   void _handleLoadingTimeout(String videoId) {
     _retryPending = false;
     _retryPlayback(videoId);
@@ -189,6 +210,8 @@ class MediaPlayer extends ChangeNotifier {
   Future<void> _retryPlayback(String videoId) async {
     if (_isRetrying) return;
     _isRetrying = true;
+    _bufferingResume = null;
+    _bufferingResumeId = null;
     try {
       if (_loadingRetryCount >= _maxLoadingRetries) {
         debugPrint(
@@ -222,6 +245,10 @@ class MediaPlayer extends ChangeNotifier {
       _sourceCache.remove(videoId);
       InnertubePlayer.instance.removeFromCache(videoId);
 
+      // Freeze the bar at the last good position so a mid-song hiccup does not
+      // visually jump to 0; restore and resume once the reload succeeds.
+      final savedBar = _progressBarState.value;
+      _progressBarLocked = true;
       _buttonState.value = ButtonState.loading;
       notifyListeners();
 
@@ -232,10 +259,29 @@ class MediaPlayer extends ChangeNotifier {
       await _player.setAudioSource(source);
       await _player.play();
 
+      // Same song: restore the frozen visuals, then seek back to where we were
+      // so the thumb never jumps to 0 (YouTube Music behavior).
+      _progressBarState.value = savedBar;
+      if (savedBar.current > Duration.zero) {
+        try {
+          await _player.seek(savedBar.current);
+        } catch (seekError) {
+          debugPrint('Retry resume seek failed: $seekError');
+        }
+      }
+      _progressBarLocked = false;
+      _buttonState.value = ButtonState.playing;
+      notifyListeners();
+
       _retryPending = true;
       _startLoadingTimeout(videoId);
+    } on RestrictedStreamException {
+      debugPrint('Playback retry aborted for $videoId: stream restricted');
+      _progressBarLocked = false;
+      await _skipRestricted(videoId);
     } catch (e) {
       debugPrint('Playback retry failed: $e');
+      _progressBarLocked = false;
       _retryPending = true;
       _startLoadingTimeout(videoId);
     } finally {
@@ -249,7 +295,21 @@ class MediaPlayer extends ChangeNotifier {
       final processingState = event.processingState;
       if (processingState == ProcessingState.loading ||
           processingState == ProcessingState.buffering) {
-        if (!GetIt.I<EqualizerService>().isApplyingEQ) {
+        _progressBarLocked = true;
+        // Mid-song hiccup: remember where playback was so we can restore it
+        // once ready again (the player may reset its position on re-request).
+        // Never for a user seek (that would undo the seek).
+        if (processingState == ProcessingState.buffering &&
+            !_switching &&
+            !_isRetrying &&
+            !_userSeeking &&
+            _bufferingResume == null) {
+          _bufferingResume = _progressBarState.value.current;
+          _bufferingResumeId = _currentSongNotifier.value?.id;
+        }
+        // A seek of an already-loaded song must not flip the play/pause button
+        // to loading (YouTube Music keeps the button as-is while seeking).
+        if (!GetIt.I<EqualizerService>().isApplyingEQ && !_userSeeking) {
           _buttonState.value = ButtonState.loading;
         }
         final currentVideoId = _currentSongNotifier.value?.id;
@@ -257,32 +317,60 @@ class MediaPlayer extends ChangeNotifier {
           _loadingRetryCount = 0;
           _lastFailedVideoId = null;
         }
-        if (currentVideoId != null) {
+        if (currentVideoId != null && !_userSeeking) {
           _retryPending = true;
           _startLoadingTimeout(currentVideoId);
         }
       } else if (processingState == ProcessingState.ready) {
+        _userSeeking = false;
+        final resume = _bufferingResume;
+        final resumeId = _bufferingResumeId;
+        _bufferingResume = null;
+        _bufferingResumeId = null;
+        final needsRestore = resume != null &&
+            resumeId == _currentSongNotifier.value?.id &&
+            resume > Duration.zero &&
+            _player.position < resume - const Duration(seconds: 1);
+        if (needsRestore) {
+          unawaited(_restorePosition(resume));
+        } else {
+          if (!_switching && !_isRetrying) {
+            _progressBarLocked = false;
+          }
+        }
         _retryPending = false;
         _cancelLoadingTimeout();
         _loadingRetryCount = 0;
         _lastFailedVideoId = null;
-        _buttonState.value =
-            isPlaying ? ButtonState.playing : ButtonState.paused;
+        if (!_switching && !_isRetrying) {
+          _buttonState.value =
+              isPlaying ? ButtonState.playing : ButtonState.paused;
+        }
         if (isPlaying) {
           GetIt.I<EqualizerService>().applyEqualizer();
         }
       } else if (processingState == ProcessingState.completed) {
+        _userSeeking = false;
+        if (!_switching && !_isRetrying) {
+          _progressBarLocked = false;
+        }
         _retryPending = false;
         _cancelLoadingTimeout();
         _loadingRetryCount = 0;
         _lastFailedVideoId = null;
         _handleSongCompleted();
       } else {
-        if (!_retryPending) {
-          _cancelLoadingTimeout();
-          _buttonState.value = ButtonState.paused;
-        } else {
-          _buttonState.value = ButtonState.loading;
+        _userSeeking = false;
+        if (!_switching && !_isRetrying) {
+          _progressBarLocked = false;
+        }
+        if (!_switching && !_isRetrying) {
+          if (!_retryPending) {
+            _cancelLoadingTimeout();
+            _buttonState.value = ButtonState.paused;
+          } else {
+            _buttonState.value = ButtonState.loading;
+          }
         }
       }
     });
@@ -324,13 +412,20 @@ class MediaPlayer extends ChangeNotifier {
       onError: (Object e, StackTrace st) {
         debugPrint('Playback error: $e');
         final videoId = _currentSongNotifier.value?.id;
+        if (e is RestrictedStreamException ||
+            e.toString().toLowerCase().contains('restricted')) {
+          _skipRestricted(videoId ?? '');
+          return;
+        }
         if (videoId == null) {
           _buttonState.value = ButtonState.paused;
           notifyListeners();
         } else if (!_isRetrying) {
           if (_retryPending) {
-            _buttonState.value = ButtonState.loading;
-            notifyListeners();
+      _buttonState.value = ButtonState.loading;
+      _progressBarLocked = true;
+      _resetProgressBar();
+      notifyListeners();
           } else {
             _retryPlayback(videoId);
           }
@@ -341,6 +436,8 @@ class MediaPlayer extends ChangeNotifier {
 
   void _listenToCurrentPosition() {
     _player.positionStream.listen((position) {
+      if (_progressBarLocked) return;
+      if (_player.processingState != ProcessingState.ready) return;
       final oldState = _progressBarState.value;
       if (oldState.current != position) {
         _progressBarState.value = ProgressBarState(
@@ -354,6 +451,8 @@ class MediaPlayer extends ChangeNotifier {
 
   void _listenToBufferedPosition() {
     _player.bufferedPositionStream.listen((position) {
+      if (_progressBarLocked) return;
+      if (_player.processingState != ProcessingState.ready) return;
       final oldState = _progressBarState.value;
       if (oldState.buffered != position) {
         _progressBarState.value = ProgressBarState(
@@ -368,11 +467,18 @@ class MediaPlayer extends ChangeNotifier {
   void _listenToTotalDuration() {
     _player.durationStream.listen((position) {
       final oldState = _progressBarState.value;
-      if (oldState.total != position) {
+      final total = position ?? Duration.zero;
+      if (oldState.total != total) {
+        // just_audio can briefly report null/0 at stream chunk boundaries;
+        // never regress a known duration to 0 (that makes the thumb jump to
+        // the start). A fresh song resets total to 0 via _resetProgressBar.
+        if (oldState.total > Duration.zero && total == Duration.zero) {
+          return;
+        }
         _progressBarState.value = ProgressBarState(
           current: oldState.current,
           buffered: oldState.buffered,
-          total: position ?? Duration.zero,
+          total: total,
         );
       }
     });
@@ -515,6 +621,11 @@ class MediaPlayer extends ChangeNotifier {
     _retryPending = false;
     _loadingRetryCount = 0;
     _lastFailedVideoId = null;
+    _switching = true;
+    _progressBarLocked = true;
+    _bufferingResume = null;
+    _bufferingResumeId = null;
+    _resetProgressBar();
 
     try {
       final source = await _getAudioSource(song);
@@ -534,11 +645,26 @@ class MediaPlayer extends ChangeNotifier {
       if (_lastPlayRequestId != requestId) return;
 
       await _player.play();
+      if (_lastPlayRequestId != requestId) return;
 
+      _switching = false;
+      _progressBarLocked = false;
+      _buttonState.value = ButtonState.playing;
+      notifyListeners();
       _syncIndex(0);
       _addHistoryForCurrent();
     } catch (e) {
+      _switching = false;
+      _progressBarLocked = false;
       debugPrint('playSong playback error for ${song['videoId']}: $e');
+      if (e is RestrictedStreamException) {
+        if (song['videoId'] != null) {
+          BlockedSongs.instance.block(song['videoId']);
+        }
+        _buttonState.value = ButtonState.paused;
+        notifyListeners();
+        return;
+      }
       if (_lastPlayRequestId == requestId && song['videoId'] != null) {
         _retryPlayback(song['videoId']);
       }
@@ -821,68 +947,113 @@ class MediaPlayer extends ChangeNotifier {
     if (eff.isEmpty) return;
     final invPos = eff.indexOf(_currentIndex.value!);
     if (invPos < 0) return;
-    var nextPos = invPos + 1;
-    if (nextPos >= eff.length) {
-      if (_loopMode.value == LoopMode.all) {
-        nextPos = 0;
-      } else {
-        if (afterCompletion) {
-          await _player.seek(Duration.zero);
-          await _player.pause();
-          _buttonState.value = ButtonState.paused;
-          notifyListeners();
-        }
-        return;
+    final nextPos = _nextPlayablePos(eff, invPos,
+        wrap: _loopMode.value == LoopMode.all);
+    if (nextPos == null) {
+      if (afterCompletion) {
+        await _player.seek(Duration.zero);
+        await _player.pause();
+        _buttonState.value = ButtonState.paused;
+        notifyListeners();
       }
+      return;
     }
     await _switchTo(eff[nextPos]);
   }
 
   Future<void> _previous() async {
     if (_songList.isEmpty || _currentIndex.value == null) return;
-    if (_player.position > const Duration(seconds: 3)) {
-      await _player.seek(Duration.zero);
-      return;
-    }
     final eff = _effectiveIndices;
     if (eff.isEmpty) return;
     final invPos = eff.indexOf(_currentIndex.value!);
     if (invPos < 0) return;
-    var prevPos = invPos - 1;
-    if (prevPos < 0) {
-      if (_loopMode.value == LoopMode.all) {
-        prevPos = eff.length - 1;
-      } else {
-        return;
-      }
-    }
+    final prevPos = _prevPlayablePos(eff, invPos,
+        wrap: _loopMode.value == LoopMode.all);
+    if (prevPos == null) return;
     await _switchTo(eff[prevPos]);
   }
 
-  Future<void> _switchTo(int index) {
-    _switchOp = _switchOp.then((_) => _doSwitch(index));
-    return _switchOp;
+  bool _isBlockedIndex(int index) {
+    if (index < 0 || index >= _songList.length) return false;
+    final t = _songList[index].tag;
+    return t is MediaItem && BlockedSongs.instance.contains(t.id);
   }
 
-  Future<void> _doSwitch(int index) async {
+  /// First unblocked display position strictly after [from] (in the effective
+  /// order), or null if none exists.
+  int? _nextPlayablePos(List<int> eff, int from, {required bool wrap}) {
+    for (var i = 1; i < eff.length; i++) {
+      final p = wrap ? (from + i) % eff.length : from + i;
+      if (!wrap && p >= eff.length) break;
+      if (!_isBlockedIndex(eff[p])) return p;
+    }
+    return null;
+  }
+
+  /// First unblocked display position strictly before [from] (in the effective
+  /// order), or null if none exists.
+  int? _prevPlayablePos(List<int> eff, int from, {required bool wrap}) {
+    for (var i = 1; i < eff.length; i++) {
+      final p = wrap ? (from - i) % eff.length : from - i;
+      if (!wrap && p < 0) break;
+      if (!_isBlockedIndex(eff[p])) return p;
+    }
+    return null;
+  }
+
+  Future<void> _switchTo(int index) async {
     if (_songList.isEmpty || index < 0 || index >= _songList.length) return;
+    final tag = _songList[index].tag;
+    final id = tag is MediaItem ? tag.id : null;
+    if (id != null && BlockedSongs.instance.contains(id)) {
+      await _skipRestricted(id);
+      return;
+    }
+    final seq = ++_switchSeq;
+    // Instant, visible switch: the UI moves immediately and only the latest
+    // request wins. Stale loads abandon themselves before touching the player.
     _syncIndex(index);
     _retryPending = false;
+    _switching = true;
+    _progressBarLocked = true;
+    _bufferingResume = null;
+    _bufferingResumeId = null;
+    _resetProgressBar();
     _buttonState.value = ButtonState.loading;
     notifyListeners();
+    unawaited(_doSwitch(index, seq));
+  }
+
+  Future<void> _doSwitch(int index, int seq) async {
     try {
       final source = await _sourceFor(index);
+      if (seq != _switchSeq) return;
       await _player.stop();
+      if (seq != _switchSeq) return;
       await _player.clearAudioSources();
+      if (seq != _switchSeq) return;
       await _player.setAudioSource(source);
+      if (seq != _switchSeq) return;
       await _player.play();
+      if (seq != _switchSeq) return;
+      _switching = false;
+      _progressBarLocked = false;
+      _buttonState.value = ButtonState.playing;
+      notifyListeners();
       _lastCompletionSongId = _songList[index].tag?.id;
       _lastCompletionTime = DateTime.now();
       _addHistoryForCurrent();
     } catch (e) {
+      if (seq != _switchSeq) return;
+      _switching = false;
+      _progressBarLocked = false;
       debugPrint('Failed to play index $index: $e');
       final tag = _songList[index].tag;
       final id = tag is MediaItem ? tag.id : null;
+      if (e is RestrictedStreamException) {
+        await _skipRestricted(id ?? '');
+        return;
+      }
       if (id != null) {
         _retryPlayback(id);
       } else {
@@ -890,6 +1061,77 @@ class MediaPlayer extends ChangeNotifier {
         notifyListeners();
       }
     }
+  }
+
+  Future<void> _skipRestricted(String videoId) async {
+    debugPrint('Skipping restricted song: $videoId');
+    _cancelLoadingTimeout();
+    _retryPending = false;
+    _loadingRetryCount = 0;
+    _lastFailedVideoId = null;
+
+    if (videoId.isNotEmpty) {
+      BlockedSongs.instance.block(videoId);
+    }
+
+    // Remove the blocked song by id, never the currently playing song.
+    int target = -1;
+    for (var i = 0; i < _songList.length; i++) {
+      final t = _songList[i].tag;
+      if (t is MediaItem && t.id == videoId) {
+        target = i;
+        break;
+      }
+    }
+    if (target < 0) {
+      _buttonState.value = ButtonState.paused;
+      notifyListeners();
+      return;
+    }
+
+    _songList.removeAt(target);
+    int shufflePos = -1;
+    if (_shuffleModeEnabled &&
+        _shuffleOrder.length == _songList.length + 1) {
+      shufflePos = _shuffleOrder.indexOf(target);
+      if (shufflePos >= 0) _shuffleOrder.removeAt(shufflePos);
+      _shuffleOrder = [
+        for (final i in _shuffleOrder) i > target ? i - 1 : i,
+      ];
+    }
+    _sourceCache.remove(videoId);
+    InnertubePlayer.instance.removeFromCache(videoId);
+
+    if (_songList.isEmpty) {
+      _currentIndex.value = null;
+      _buttonState.value = ButtonState.paused;
+      _emit();
+      return;
+    }
+
+    // The song that followed the blocked one is the next to play.
+    int? next;
+    if (_shuffleModeEnabled &&
+        _shuffleOrder.length == _songList.length) {
+      if (shufflePos >= 0 && shufflePos < _shuffleOrder.length) {
+        next = _shuffleOrder[shufflePos];
+      }
+    } else if (target < _songList.length) {
+      next = target;
+    }
+
+    if (next == null) {
+      if (_loopMode.value == LoopMode.all) {
+        await _switchTo(0);
+      } else {
+        _currentIndex.value = null;
+        _buttonState.value = ButtonState.paused;
+        _emit();
+      }
+      return;
+    }
+
+    await _switchTo(next);
   }
 
   Future<void> togglePlay() async {
@@ -920,6 +1162,19 @@ class MediaPlayer extends ChangeNotifier {
     }
 
     await _player.play();
+  }
+
+  /// User-initiated seek (bar drag, +10s/-10s, lyrics). During the seek the
+  /// play/pause button must NOT flip to loading, and seek buffering must not be
+  /// treated as a mid-song hiccup (which would try to restore the old position).
+  Future<void> seekTo(Duration position) async {
+    _userSeeking = true;
+    try {
+      await _player.seek(position);
+    } catch (e) {
+      debugPrint('seekTo failed: $e');
+      _userSeeking = false;
+    }
   }
 }
 

@@ -53,7 +53,7 @@ class _AboutPageState extends State<AboutPage> {
               ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: Image.asset(
-                  'icons/Coda_nobg.png',
+                  'icons/Coda_logo.png',
                   width: 120,
                   height: 120,
                   fit: BoxFit.contain,

@@ -135,6 +135,7 @@ Future<void> initialiseHive() async {
   await Hive.openBox('SONG_HISTORY');
   await Hive.openBox('FAVOURITES');
   await Hive.openBox('DOWNLOADS');
+  await Hive.openBox('BLOCKED_SONGS');
 }
 
 class SmoothScrollBehavior extends MaterialScrollBehavior {

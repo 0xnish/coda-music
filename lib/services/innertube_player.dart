@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'yt_audio_stream.dart';
+
 class InnertubeClientConfig {
   final String clientName;
   final String clientVersion;
@@ -176,6 +178,8 @@ class InnertubePlayer {
           _cache[videoId] = result;
           return result;
         }
+      } on RestrictedStreamException {
+        rethrow;
       } catch (e) {
         debugPrint(
             'Innertube: ${client.clientName} failed for $videoId: $e');
@@ -232,14 +236,21 @@ class InnertubePlayer {
     if (status != 'OK') {
       debugPrint(
           'Innertube: ${client.clientName} status=$status');
-      return null;
+      throw RestrictedStreamException(
+          'YouTube reports video not playable (status=$status)');
     }
 
     final streamingData = data['streamingData'] as Map?;
-    if (streamingData == null) return null;
+    if (streamingData == null) {
+      throw RestrictedStreamException(
+          'YouTube reports no streaming data for $videoId');
+    }
 
     final adaptiveFormats = streamingData['adaptiveFormats'] as List?;
-    if (adaptiveFormats == null || adaptiveFormats.isEmpty) return null;
+    if (adaptiveFormats == null || adaptiveFormats.isEmpty) {
+      throw RestrictedStreamException(
+          'YouTube reports no playable formats for $videoId');
+    }
 
     final audioFormats = <Map<String, dynamic>>[];
     for (final format in adaptiveFormats) {
@@ -269,7 +280,8 @@ class InnertubePlayer {
     if (audioFormats.isEmpty) {
       debugPrint(
           'Innertube: ${client.clientName} no playable audio formats');
-      return null;
+      throw RestrictedStreamException(
+          'YouTube reports no playable audio formats for $videoId');
     }
 
     audioFormats.sort((a, b) =>
@@ -280,7 +292,10 @@ class InnertubePlayer {
 
     final urlStr = selected['_resolvedUrl']?.toString() ??
         selected['url']?.toString();
-    if (urlStr == null || urlStr.isEmpty) return null;
+    if (urlStr == null || urlStr.isEmpty) {
+      throw RestrictedStreamException(
+          'YouTube reports no stream URL for $videoId');
+    }
 
     final mimeType = selected['mimeType']?.toString() ?? 'audio/webm';
     final bitrate = selected['bitrate'] as int? ?? 128000;

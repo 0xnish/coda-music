@@ -141,7 +141,7 @@ class _SquareMiniPlayerState extends State<SquareMiniPlayer> {
                               setState(() => _dragMs = v.round());
                             },
                             onChangeEnd: (v) {
-                              mediaPlayer.player.seek(
+                              mediaPlayer.seekTo(
                                   Duration(milliseconds: v.round()));
                               setState(() => _dragMs = null);
                             },

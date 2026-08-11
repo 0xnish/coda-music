@@ -6,6 +6,13 @@ import 'package:just_audio/just_audio.dart';
 
 import 'innertube_player.dart';
 
+class RestrictedStreamException implements Exception {
+  final String message;
+  RestrictedStreamException(this.message);
+  @override
+  String toString() => message;
+}
+
 class _CachedStream {
   final Uri url;
   final int totalBytes;
@@ -51,6 +58,8 @@ class YouTubeAudioSource extends StreamAudioSource {
           );
           return _cachedStream!;
         }
+      } on RestrictedStreamException {
+        rethrow;
       } catch (e) {
         debugPrint('AudioSource: attempt $attempts failed for $videoId: $e');
       }
@@ -93,6 +102,8 @@ class YouTubeAudioSource extends StreamAudioSource {
           stream: stream,
           contentType: streamInfo.mimeType,
         );
+      } on RestrictedStreamException {
+        rethrow;
       } catch (e) {
         debugPrint('AudioSource: request attempt ${attempt + 1} failed: $e');
         if (attempt == maxAttempts - 1) {
@@ -242,11 +253,21 @@ Future<AudioSource> getDirectUrlAudioSource(
 
 Future<Stream<List<int>>> _downloadStream(Uri url, int start, int end) async {
   final client = HttpClient();
-  final request = await client.getUrl(url);
-  request.headers.add(HttpHeaders.rangeHeader, 'bytes=$start-$end');
-  request.headers.add('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0');
-  request.headers.add('Origin', 'https://music.youtube.com');
-  request.headers.add('Referer', 'https://music.youtube.com/');
-  final response = await request.close();
-  return response;
+  try {
+    final request = await client.getUrl(url);
+    request.headers.add(HttpHeaders.rangeHeader, 'bytes=$start-$end');
+    request.headers.add('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0');
+    request.headers.add('Origin', 'https://music.youtube.com');
+    request.headers.add('Referer', 'https://music.youtube.com/');
+    final response = await request.close();
+    if (response.statusCode == HttpStatus.forbidden) {
+      client.close(force: true);
+      throw RestrictedStreamException(
+          'YouTube restricted this stream (HTTP 403)');
+    }
+    return response;
+  } catch (e) {
+    client.close(force: true);
+    rethrow;
+  }
 }
