@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="icons/Coda_nobg.png" alt="CODA MUSIC Logo" width="120" />
+<img src="icons/Coda_logo.png" alt="CODA MUSIC Logo" width="120" />
 
 <br>
 

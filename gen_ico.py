@@ -1,6 +1,6 @@
 from PIL import Image
 
-img = Image.open("icons/Coda_nobg.png").convert("RGBA")
+img = Image.open("icons/Coda_logo.png").convert("RGBA")
 w, h = img.size
 print(f"Source: {w}x{h}")
 
