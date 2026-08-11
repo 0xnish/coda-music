@@ -4,6 +4,17 @@ All notable changes to CODA MUSIC will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.0.0] - 2026-08-11
+
+### Added
+- New app icon and branding
+- Blocked songs service
+
+### Changed
+- Removed visualizer feature completely
+- Reworked media player and audio streaming internals
+- Restyled progress bar thumb
+
 ## [2.5.0] - 2026-08-07
 
 ### Fixed
