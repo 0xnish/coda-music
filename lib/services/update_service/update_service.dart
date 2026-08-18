@@ -50,7 +50,7 @@ class UpdateService {
           name: 'New Update Available',
           body: 'A new version of Coda Music is available.',
           publishedAt: '',
-          downloadUrl: 'https://CodaMusic.onrender.com/',
+          downloadUrl: 'https://github.com/0xnish/coda-music/releases/latest',
         );
       }
       
