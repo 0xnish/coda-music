@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart';
 
 class SpotifyEmbedScraper {
@@ -16,13 +15,11 @@ class SpotifyEmbedScraper {
       });
 
       if (response.statusCode != 200) {
-        debugPrint('Failed to fetch embed page: ${response.statusCode}');
         return {'tracks': <Map>[], 'playlistName': 'Imported Playlist'};
       }
 
       return _parseEmbedPage(response.body, isAlbum: false);
-    } catch (e) {
-      debugPrint('Error fetching playlist embed: $e');
+    } catch (_) {
       return {'tracks': <Map>[], 'playlistName': 'Imported Playlist'};
     }
   }
@@ -38,13 +35,11 @@ class SpotifyEmbedScraper {
       });
 
       if (response.statusCode != 200) {
-        debugPrint('Failed to fetch embed page: ${response.statusCode}');
         return {'tracks': <Map>[], 'albumName': 'Imported Album'};
       }
 
       return _parseEmbedPage(response.body, isAlbum: true);
-    } catch (e) {
-      debugPrint('Error fetching album embed: $e');
+    } catch (_) {
       return {'tracks': <Map>[], 'albumName': 'Imported Album'};
     }
   }
@@ -62,9 +57,7 @@ class SpotifyEmbedScraper {
           playlistName = playlistName.replaceAll(' - Spotify', '');
         }
       }
-    } catch (e) {
-      debugPrint('Error parsing name: $e');
-    }
+    } catch (_) {}
 
     try {
       final trackPattern = RegExp(
@@ -83,9 +76,7 @@ class SpotifyEmbedScraper {
           'title': '$title $artist',
         });
       }
-    } catch (e) {
-      debugPrint('Error parsing tracks: $e');
-    }
+    } catch (_) {}
 
     return {
       'tracks': tracks,

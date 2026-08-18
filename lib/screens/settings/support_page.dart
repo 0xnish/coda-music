@@ -74,7 +74,7 @@ class _SupportPageState extends State<SupportPage> {
                     title: 'Buy Me a Coffee',
                     value: 'Buy Me a Coffee',
                         onTap: () async {
-                          final uri = Uri.parse('https://buymeacoffee.com/coder.nishanth');
+                          final uri = Uri.parse('https://buymeacoffee.com/0xnish');
                           if (await canLaunchUrl(uri)) {
                             await launchUrl(uri, mode: LaunchMode.externalApplication);
                           }

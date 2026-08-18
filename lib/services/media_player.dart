@@ -196,9 +196,7 @@ class MediaPlayer extends ChangeNotifier {
     // (reset) position never overwrites the frozen thumb.
     try {
       await _player.seek(resume);
-    } catch (e) {
-      debugPrint('Restore seek failed: $e');
-    }
+    } catch (_) {}
     _progressBarLocked = false;
   }
 
@@ -214,8 +212,6 @@ class MediaPlayer extends ChangeNotifier {
     _bufferingResumeId = null;
     try {
       if (_loadingRetryCount >= _maxLoadingRetries) {
-        debugPrint(
-            'Giving up auto-retry for $videoId after $_loadingRetryCount attempts');
         _retryPending = false;
         _loadingRetryCount = 0;
         _lastFailedVideoId = null;
@@ -240,8 +236,6 @@ class MediaPlayer extends ChangeNotifier {
         return;
       }
 
-      debugPrint(
-          'Retrying playback for $videoId (attempt $_loadingRetryCount)');
       _sourceCache.remove(videoId);
       InnertubePlayer.instance.removeFromCache(videoId);
 
@@ -265,9 +259,7 @@ class MediaPlayer extends ChangeNotifier {
       if (savedBar.current > Duration.zero) {
         try {
           await _player.seek(savedBar.current);
-        } catch (seekError) {
-          debugPrint('Retry resume seek failed: $seekError');
-        }
+        } catch (_) {}
       }
       _progressBarLocked = false;
       _buttonState.value = ButtonState.playing;
@@ -276,11 +268,9 @@ class MediaPlayer extends ChangeNotifier {
       _retryPending = true;
       _startLoadingTimeout(videoId);
     } on RestrictedStreamException {
-      debugPrint('Playback retry aborted for $videoId: stream restricted');
       _progressBarLocked = false;
       await _skipRestricted(videoId);
     } catch (e) {
-      debugPrint('Playback retry failed: $e');
       _progressBarLocked = false;
       _retryPending = true;
       _startLoadingTimeout(videoId);
@@ -390,9 +380,7 @@ class MediaPlayer extends ChangeNotifier {
     _lastCompletionTime = now;
     try {
       await _onSongCompleted();
-    } catch (e) {
-      debugPrint('_onSongCompleted error: $e');
-    } finally {
+    } catch (_) {} finally {
       _handlingCompletion = false;
     }
   }
@@ -410,7 +398,6 @@ class MediaPlayer extends ChangeNotifier {
     _player.playbackEventStream.listen(
       (event) {},
       onError: (Object e, StackTrace st) {
-        debugPrint('Playback error: $e');
         final videoId = _currentSongNotifier.value?.id;
         if (e is RestrictedStreamException ||
             e.toString().toLowerCase().contains('restricted')) {
@@ -656,7 +643,6 @@ class MediaPlayer extends ChangeNotifier {
     } catch (e) {
       _switching = false;
       _progressBarLocked = false;
-      debugPrint('playSong playback error for ${song['videoId']}: $e');
       if (e is RestrictedStreamException) {
         if (song['videoId'] != null) {
           BlockedSongs.instance.block(song['videoId']);
@@ -708,9 +694,7 @@ class MediaPlayer extends ChangeNotifier {
       for (final song in songMaps) {
         try {
           queue.add(await _getAudioSource(song));
-        } catch (e) {
-          debugPrint('playAll: failed to build source: $e');
-        }
+        } catch (_) {}
       }
 
       autoFetching = false;
@@ -771,9 +755,7 @@ class MediaPlayer extends ChangeNotifier {
     for (final s in songMaps) {
       try {
         queue.add(await _getAudioSource(s));
-      } catch (e) {
-        debugPrint('startRelated: failed to build source: $e');
-      }
+      } catch (_) {}
     }
     if (queue.isEmpty) return;
 
@@ -791,9 +773,7 @@ class MediaPlayer extends ChangeNotifier {
     for (final s in songMaps) {
       try {
         queue.add(await _getAudioSource(s));
-      } catch (e) {
-        debugPrint('startPlaylistSongs: failed to build source: $e');
-      }
+      } catch (_) {}
     }
     if (queue.isEmpty) return;
 
@@ -877,9 +857,7 @@ class MediaPlayer extends ChangeNotifier {
     _playbackSpeed = speed;
     try {
       await _player.setSpeed(speed);
-    } catch (e) {
-      debugPrint('Failed to set playback speed: $e');
-    }
+    } catch (_) {}
     await GetIt.I<EqualizerService>().applyEqualizer();
     notifyListeners();
   }
@@ -888,9 +866,7 @@ class MediaPlayer extends ChangeNotifier {
     _pitch = pitch;
     try {
       await _player.setPitch(pitch);
-    } catch (e) {
-      debugPrint('Failed to set pitch: $e');
-    }
+    } catch (_) {}
     await GetIt.I<EqualizerService>().applyEqualizer();
     notifyListeners();
   }
@@ -1047,7 +1023,6 @@ class MediaPlayer extends ChangeNotifier {
       if (seq != _switchSeq) return;
       _switching = false;
       _progressBarLocked = false;
-      debugPrint('Failed to play index $index: $e');
       final tag = _songList[index].tag;
       final id = tag is MediaItem ? tag.id : null;
       if (e is RestrictedStreamException) {
@@ -1064,7 +1039,6 @@ class MediaPlayer extends ChangeNotifier {
   }
 
   Future<void> _skipRestricted(String videoId) async {
-    debugPrint('Skipping restricted song: $videoId');
     _cancelLoadingTimeout();
     _retryPending = false;
     _loadingRetryCount = 0;
@@ -1171,8 +1145,7 @@ class MediaPlayer extends ChangeNotifier {
     _userSeeking = true;
     try {
       await _player.seek(position);
-    } catch (e) {
-      debugPrint('seekTo failed: $e');
+    } catch (_) {
       _userSeeking = false;
     }
   }

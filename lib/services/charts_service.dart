@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' show parse;
 import 'package:Coda/services/chart_model.dart';
@@ -60,9 +59,7 @@ class ChartsService {
              if (model.chartItems != null && model.chartItems!.isNotEmpty) {
                  chart.coverArt = model.chartItems!.first.imageUrl;
              }
-         } catch (e) {
-           debugPrint('Failed to fetch chart preview: $e');
-         }
+         } catch (_) {}
       }));
       
       return charts;

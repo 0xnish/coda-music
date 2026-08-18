@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -56,6 +56,8 @@ class InnertubeStreamInfo {
   final int bitrate;
   final String quality;
   final String clientName;
+  final String userAgent;
+  final bool fromInnerTube;
 
   const InnertubeStreamInfo({
     required this.url,
@@ -64,6 +66,8 @@ class InnertubeStreamInfo {
     required this.bitrate,
     required this.quality,
     required this.clientName,
+    required this.userAgent,
+    this.fromInnerTube = false,
   });
 }
 
@@ -74,11 +78,17 @@ class InnertubePlayer {
   static const String _apiUrl =
       'https://music.youtube.com/youtubei/v1/player?key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30&prettyPrint=false';
 
+  static const String _downloadUserAgent =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
   static const String _userAgent =
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0';
 
   static const String _userAgentVR =
       'com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip';
+
+  static const String _userAgentVR43 =
+      'com.google.android.apps.youtube.vr.oculus/1.43.32 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip';
 
   static const String _userAgentTV =
       'Mozilla/5.0 (ChromiumStylePlatform) Cobalt/25.lts.30.1034943-gold (unlike Gecko), Unknown_TV_Unknown_0/Unknown (Unknown, Unknown)';
@@ -87,6 +97,17 @@ class InnertubePlayer {
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15';
 
   static final List<InnertubeClientConfig> _clientOrder = [
+    const InnertubeClientConfig(
+      clientName: 'VISIONOS',
+      clientVersion: '0.1',
+      clientId: 101,
+      userAgent: _userAgentVisionOS,
+      osInfo: {'osName': 'visionOS', 'osVersion': '1.3.21O771'},
+      deviceInfo: {
+        'deviceMake': 'Apple',
+        'deviceModel': 'RealityDevice14,1',
+      },
+    ),
     const InnertubeClientConfig(
       clientName: 'ANDROID_VR',
       clientVersion: '1.65.10',
@@ -101,21 +122,16 @@ class InnertubePlayer {
       includeUserAgentInContext: true,
     ),
     const InnertubeClientConfig(
-      clientName: 'VISIONOS',
-      clientVersion: '0.1',
-      clientId: 101,
-      userAgent: _userAgentVisionOS,
-      osInfo: {'osName': 'visionOS', 'osVersion': '1.3.21O771'},
+      clientName: 'ANDROID_VR',
+      clientVersion: '1.43.32',
+      clientId: 28,
+      userAgent: _userAgentVR43,
+      osInfo: {'osName': 'Android', 'osVersion': '12L'},
       deviceInfo: {
-        'deviceMake': 'Apple',
-        'deviceModel': 'RealityDevice14,1',
+        'deviceMake': 'Oculus',
+        'deviceModel': 'Quest 3',
+        'androidSdkVersion': '32',
       },
-    ),
-    const InnertubeClientConfig(
-      clientName: 'TVHTML5',
-      clientVersion: '7.20260114.12.00',
-      clientId: 7,
-      userAgent: _userAgentTV,
       includeUserAgentInContext: true,
     ),
     const InnertubeClientConfig(
@@ -125,12 +141,11 @@ class InnertubePlayer {
       userAgent: _userAgent,
     ),
     const InnertubeClientConfig(
-      clientName: 'IOS',
-      clientVersion: '21.03.1',
-      clientId: 5,
-      userAgent:
-          'com.google.ios.youtube/21.03.1 (iPhone16,2; U; CPU iOS 18_2 like Mac OS X;)',
-      osInfo: {'osVersion': '18.2.22C152'},
+      clientName: 'TVHTML5',
+      clientVersion: '7.20260114.12.00',
+      clientId: 7,
+      userAgent: _userAgentTV,
+      includeUserAgentInContext: true,
     ),
   ];
 
@@ -148,7 +163,7 @@ class InnertubePlayer {
       final response = await http.get(
         Uri.parse('https://music.youtube.com'),
         headers: {
-          'User-Agent': _userAgent,
+          'User-Agent': _downloadUserAgent,
           'Accept-Language': 'en-US,en;q=0.9',
         },
       );
@@ -161,6 +176,123 @@ class InnertubePlayer {
     } catch (_) {}
   }
 
+  // --- yt-dlp (slow but handles n-param + signature decryption) ---
+
+  static String? _pythonPath;
+  static bool? _ytDlpAvailable;
+
+  static Future<String?> _findPython() async {
+    if (_pythonPath != null) return _pythonPath;
+    for (final name in ['python', 'python3', 'C:\\Python314\\python.exe']) {
+      try {
+        final result =
+            await Process.run(name, ['--version'], runInShell: true);
+        if (result.exitCode == 0) {
+          _pythonPath = name;
+          return _pythonPath;
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  static Future<bool> isYtDlpAvailable() async {
+    if (_ytDlpAvailable != null) return _ytDlpAvailable!;
+    final python = await _findPython();
+    if (python == null) {
+      _ytDlpAvailable = false;
+      return false;
+    }
+    try {
+      final result = await Process.run(python, ['-m', 'yt_dlp', '--version'],
+          runInShell: true);
+      _ytDlpAvailable = result.exitCode == 0;
+      return _ytDlpAvailable!;
+    } catch (_) {
+      _ytDlpAvailable = false;
+      return false;
+    }
+  }
+
+  static Future<void> prewarm() async {
+    final python = await _findPython();
+    if (python == null) return;
+    try {
+      await Process.run(python, ['-m', 'yt_dlp', '--version'],
+          runInShell: true);
+    } catch (_) {}
+  }
+
+  Future<InnertubeStreamInfo?> _fetchWithYtDlp(
+      String videoId, String quality) async {
+    final python = await _findPython();
+    if (python == null) return null;
+
+    try {
+      final formatSelector = quality == 'high' ? 'bestaudio' : 'worstaudio';
+      final process = await Process.start(
+        python,
+        [
+          '-m', 'yt_dlp',
+          '-f', formatSelector,
+          '--dump-json',
+          '--no-playlist',
+          '--skip-download',
+          '--no-cache-dir',
+          '--socket-timeout', '10',
+          '--extractor-args',
+          'youtube:player_client=android_vr,web',
+          'https://www.youtube.com/watch?v=$videoId',
+        ],
+        runInShell: true,
+      );
+
+      final stdoutFuture = process.stdout.join();
+      final stderrFuture = process.stderr.join();
+      final exitCode = await process.exitCode.timeout(
+        const Duration(seconds: 20),
+        onTimeout: () {
+          process.kill();
+          return -1;
+        },
+      );
+
+      final stdoutStr = await stdoutFuture;
+      final stderrStr = await stderrFuture;
+
+      if (exitCode != 0) return null;
+
+      final data = json.decode(stdoutStr) as Map<String, dynamic>;
+      final urlStr = data['url']?.toString();
+      if (urlStr == null || urlStr.isEmpty) return null;
+
+      final ext = data['ext']?.toString() ?? 'webm';
+      final acodec = data['acodec']?.toString() ?? 'opus';
+      final mimeType = ext == 'webm'
+          ? 'audio/webm; codecs="$acodec"'
+          : 'audio/mp4; codecs="$acodec"';
+      final contentLength = data['filesize'] as int? ??
+          data['filesize_approx'] as int? ??
+          0;
+      final abr = (data['abr'] as num?)?.toDouble() ?? 128.0;
+      final bitrate = (abr * 1000).toInt();
+
+      return InnertubeStreamInfo(
+        url: Uri.parse(urlStr),
+        totalBytes: contentLength,
+        mimeType: mimeType,
+        bitrate: bitrate,
+        quality: quality,
+        clientName: 'yt-dlp',
+        userAgent: _downloadUserAgent,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // --- Main entry: InnerTube first (instant), yt-dlp only on 403 ---
+
   Future<InnertubeStreamInfo?> getStreamInfo(
     String videoId, {
     String quality = 'high',
@@ -169,8 +301,8 @@ class InnertubePlayer {
       return _cache[videoId];
     }
 
+    // Fast path: InnerTube API (instant URL extraction)
     await _ensureVisitorData();
-
     for (final client in _clientOrder) {
       try {
         final result = await _fetchWithClient(client, videoId, quality);
@@ -180,12 +312,27 @@ class InnertubePlayer {
         }
       } on RestrictedStreamException {
         rethrow;
-      } catch (e) {
-        debugPrint(
-            'Innertube: ${client.clientName} failed for $videoId: $e');
-      }
+      } catch (_) {}
     }
 
+    return null;
+  }
+
+  /// Called when an InnerTube URL returns 403 during download.
+  /// Falls back to yt-dlp which decrypts n-param/signature.
+  Future<InnertubeStreamInfo?> refreshWithYtDlp(
+    String videoId, {
+    String quality = 'high',
+  }) async {
+    if (!await isYtDlpAvailable()) return null;
+
+    try {
+      final result = await _fetchWithYtDlp(videoId, quality);
+      if (result != null) {
+        _cache[videoId] = result;
+        return result;
+      }
+    } catch (_) {}
     return null;
   }
 
@@ -199,6 +346,12 @@ class InnertubePlayer {
       'videoId': videoId,
       'contentCheckOk': true,
       'racyCheckOk': true,
+      'playbackContext': {
+        'contentPlaybackContext': {
+          'html5Preference': 'HTML5_PREF_WANTS',
+          'signatureTimestamp': 20073,
+        },
+      },
     };
 
     final headers = {
@@ -208,10 +361,7 @@ class InnertubePlayer {
       'X-YouTube-Client-Name': client.clientId.toString(),
       'X-YouTube-Client-Version': client.clientVersion,
       'X-Origin': 'https://music.youtube.com',
-      'Origin': 'https://music.youtube.com',
-      'Referer': 'https://music.youtube.com/',
       'Accept-Language': 'en-US,en;q=0.9',
-      'Cache-Control': 'no-cache',
       if (_visitorData != null) 'X-Goog-Visitor-Id': _visitorData!,
     };
 
@@ -221,21 +371,15 @@ class InnertubePlayer {
           headers: headers,
           body: json.encode(body),
         )
-        .timeout(const Duration(seconds: 15));
+        .timeout(const Duration(seconds: 10));
 
-    if (response.statusCode != 200) {
-      debugPrint(
-          'Innertube: ${client.clientName} HTTP ${response.statusCode}');
-      return null;
-    }
+    if (response.statusCode != 200) return null;
 
     final data = json.decode(response.body) as Map<String, dynamic>;
 
     final status =
         (data['playabilityStatus'] as Map?)?['status']?.toString();
     if (status != 'OK') {
-      debugPrint(
-          'Innertube: ${client.clientName} status=$status');
       throw RestrictedStreamException(
           'YouTube reports video not playable (status=$status)');
     }
@@ -278,8 +422,6 @@ class InnertubePlayer {
     }
 
     if (audioFormats.isEmpty) {
-      debugPrint(
-          'Innertube: ${client.clientName} no playable audio formats');
       throw RestrictedStreamException(
           'YouTube reports no playable audio formats for $videoId');
     }
@@ -302,10 +444,6 @@ class InnertubePlayer {
     final contentLength =
         int.tryParse(selected['contentLength']?.toString() ?? '') ?? 0;
 
-    debugPrint(
-        'Innertube: OK ${client.clientName} for $videoId '
-        '(audio=$mimeType, bps=$bitrate, len=$contentLength)');
-
     return InnertubeStreamInfo(
       url: Uri.parse(urlStr),
       totalBytes: contentLength,
@@ -313,6 +451,8 @@ class InnertubePlayer {
       bitrate: bitrate,
       quality: quality,
       clientName: client.clientName,
+      userAgent: client.userAgent,
+      fromInnerTube: true,
     );
   }
 

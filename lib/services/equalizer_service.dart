@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:just_audio_platform_interface/just_audio_platform_interface.dart';
@@ -59,8 +58,7 @@ class EqualizerService {
           }
         }
       }
-    } catch (e) {
-      debugPrint('Equalizer: failed to get NativePlayer: $e');
+    } catch (_) {
       _nativePlayer = null;
     }
   }
@@ -111,19 +109,15 @@ class EqualizerService {
     if (afValue == _lastAppliedAf) return;
     _lastAppliedAf = afValue;
 
-    debugPrint('Equalizer: setting af="$afValue"');
     try {
       await _nativePlayer!.setProperty('af', afValue);
-    } catch (e) {
-      debugPrint('Equalizer: setProperty failed, refreshing reference: $e');
+    } catch (_) {
       _invalidateNativePlayer();
       _ensureNativePlayer();
       if (_nativePlayer != null) {
         try {
           await _nativePlayer!.setProperty('af', afValue);
-        } catch (e2) {
-          debugPrint('Equalizer: retry failed: $e2');
-        }
+        } catch (_) {}
       }
     }
   }
@@ -160,19 +154,15 @@ class EqualizerService {
     if (_lastAppliedAf == resetAf) return;
     _lastAppliedAf = resetAf;
 
-    debugPrint('Equalizer: removing filter');
     try {
       await _nativePlayer!.setProperty('af', resetAf);
-    } catch (e) {
-      debugPrint('Equalizer: setProperty failed, refreshing reference: $e');
+    } catch (_) {
       _invalidateNativePlayer();
       _ensureNativePlayer();
       if (_nativePlayer != null) {
         try {
           await _nativePlayer!.setProperty('af', resetAf);
-        } catch (e2) {
-          debugPrint('Equalizer: retry failed: $e2');
-        }
+        } catch (_) {}
       }
     }
   }

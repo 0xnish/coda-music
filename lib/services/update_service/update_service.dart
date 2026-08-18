@@ -10,7 +10,7 @@ import 'package:pub_semver/pub_semver.dart';
 import 'package:Coda/services/bottom_message.dart';
 
 class UpdateService {
-  static const String owner = 'coder-nishanth';
+  static const String owner = '0xnish';
   static const String repo = 'coda-music';
 
   static Future<UpdateInfo?> checkForUpdate() async {
@@ -20,7 +20,7 @@ class UpdateService {
 
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final Uri uri = Uri.parse(
-        'https://raw.githubusercontent.com/coder-nishanth/coda-music/main/desktop_update.json?t=$timestamp',
+        'https://raw.githubusercontent.com/0xnish/coda-music/main/desktop_update.json?t=$timestamp',
       );
 
       final response = await http.get(uri);

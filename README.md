@@ -12,10 +12,10 @@
 
 <br>
 
-<a href="https://github.com/coder-nishanth/coda-music/releases" target="_blank"><img src="https://img.shields.io/badge/version-3.0.0-blue?style=for-the-badge" alt="Version"></a>
+<a href="https://github.com/0xnish/coda-music/releases" target="_blank"><img src="https://img.shields.io/badge/version-3.1.0-blue?style=for-the-badge" alt="Version"></a>
 <a href="https://flutter.dev" target="_blank"><img src="https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white" alt="Flutter"></a>
 <a href="https://CodaMusic.onrender.com" target="_blank"><img src="https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white" alt="Windows"></a>
-<a href="https://github.com/coder-nishanth/coda-music/blob/main/LICENSE" target="_blank"><img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License"></a>
+<a href="https://github.com/0xnish/coda-music/blob/main/LICENSE" target="_blank"><img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License"></a>
 
 <br>
 
@@ -76,7 +76,7 @@ streaming, local playback, lyrics, and chart discovery — all in one beautiful 
 
 ```bash
 # Clone
-git clone https://github.com/coder-nishanth/coda-music.git
+git clone https://github.com/0xnish/coda-music.git
 cd coda-music
 
 # Install & Run

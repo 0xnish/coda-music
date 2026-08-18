@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
 import 'innertube_player.dart';
@@ -17,7 +16,8 @@ class _CachedStream {
   final Uri url;
   final int totalBytes;
   final String mimeType;
-  _CachedStream({required this.url, required this.totalBytes, required this.mimeType});
+  final String userAgent;
+  _CachedStream({required this.url, required this.totalBytes, required this.mimeType, required this.userAgent});
 }
 
 class YouTubeAudioSource extends StreamAudioSource {
@@ -40,34 +40,22 @@ class YouTubeAudioSource extends StreamAudioSource {
   Future<_CachedStream> _getStreamInfo() async {
     if (_cachedStream != null) return _cachedStream!;
 
-    int attempts = 0;
-    const int maxAttempts = 3;
-    while (attempts < maxAttempts) {
-      attempts++;
-      try {
-        final result = await InnertubePlayer.instance.getStreamInfo(
-          videoId,
-          quality: quality,
-        );
+    final result = await InnertubePlayer.instance.getStreamInfo(
+      videoId,
+      quality: quality,
+    );
 
-        if (result != null) {
-          _cachedStream = _CachedStream(
-            url: result.url,
-            totalBytes: result.totalBytes > 0 ? result.totalBytes : 10 * 1024 * 1024,
-            mimeType: result.mimeType,
-          );
-          return _cachedStream!;
-        }
-      } on RestrictedStreamException {
-        rethrow;
-      } catch (e) {
-        debugPrint('AudioSource: attempt $attempts failed for $videoId: $e');
-      }
-      if (attempts < maxAttempts) {
-        await Future.delayed(Duration(seconds: attempts));
-      }
+    if (result != null) {
+      _cachedStream = _CachedStream(
+        url: result.url,
+        totalBytes: result.totalBytes > 0 ? result.totalBytes : 10 * 1024 * 1024,
+        mimeType: result.mimeType,
+        userAgent: result.userAgent,
+      );
+      return _cachedStream!;
     }
-    throw Exception('Failed to get audio stream for $videoId after $maxAttempts attempts.');
+
+    throw Exception('No audio stream available for $videoId.');
   }
 
   @override
@@ -75,10 +63,6 @@ class YouTubeAudioSource extends StreamAudioSource {
     const int maxAttempts = 3;
     for (int attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        if (attempt > 0) {
-          _cachedStream = null;
-        }
-
         final streamInfo = await _getStreamInfo();
 
         start ??= 0;
@@ -94,7 +78,7 @@ class YouTubeAudioSource extends StreamAudioSource {
           end = start + 1;
         }
 
-        final stream = await _downloadStream(streamInfo.url, start, end - 1);
+        final stream = await _downloadStream(streamInfo.url, start, end - 1, userAgent: streamInfo.userAgent);
         return StreamAudioResponse(
           sourceLength: streamInfo.totalBytes,
           contentLength: end - start,
@@ -102,12 +86,39 @@ class YouTubeAudioSource extends StreamAudioSource {
           stream: stream,
           contentType: streamInfo.mimeType,
         );
-      } on RestrictedStreamException {
+      } on RestrictedStreamException catch (_) {
+        // Clear cache so next call fetches fresh URL
+        _cachedStream = null;
+        InnertubePlayer.instance.removeFromCache(videoId);
+
+        final ytDlpResult = await InnertubePlayer.instance.refreshWithYtDlp(
+          videoId,
+          quality: quality,
+        );
+        if (ytDlpResult != null) {
+          _cachedStream = _CachedStream(
+            url: ytDlpResult.url,
+            totalBytes: ytDlpResult.totalBytes > 0 ? ytDlpResult.totalBytes : 10 * 1024 * 1024,
+            mimeType: ytDlpResult.mimeType,
+            userAgent: ytDlpResult.userAgent,
+          );
+          final stream = await _downloadStream(
+            ytDlpResult.url, start ?? 0,
+            ((end ?? ytDlpResult.totalBytes) > 0 ? end ?? ytDlpResult.totalBytes : (start ?? 0) + 10 * 1024 * 1024) - 1,
+            userAgent: ytDlpResult.userAgent,
+          );
+          return StreamAudioResponse(
+            sourceLength: ytDlpResult.totalBytes,
+            contentLength: ((end ?? ytDlpResult.totalBytes) > 0 ? end ?? ytDlpResult.totalBytes : (start ?? 0) + 10 * 1024 * 1024) - (start ?? 0),
+            offset: start ?? 0,
+            stream: stream,
+            contentType: ytDlpResult.mimeType,
+          );
+        }
         rethrow;
-      } catch (e) {
-        debugPrint('AudioSource: request attempt ${attempt + 1} failed: $e');
+      } catch (_) {
         if (attempt == maxAttempts - 1) {
-          throw Exception('Failed to load audio after $maxAttempts attempts: $e');
+          throw Exception('Failed to load audio after $maxAttempts attempts');
         }
         _cachedStream = null;
         await Future.delayed(Duration(seconds: (attempt + 1) * 2));
@@ -191,7 +202,7 @@ Future<void> handleAudioRequest(HttpRequest request) async {
       }
     }
 
-    final stream = await _downloadStream(result.url, start, end);
+    final stream = await _downloadStream(result.url, start, end, userAgent: result.userAgent);
 
     response.statusCode = isPartial ? HttpStatus.partialContent : HttpStatus.ok;
     response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
@@ -205,9 +216,7 @@ Future<void> handleAudioRequest(HttpRequest request) async {
       await for (final chunk in stream) {
         response.add(chunk);
       }
-    } catch (streamError) {
-      debugPrint('Stream chunk read error: $streamError');
-    }
+    } catch (_) {}
 
     await response.close();
   } catch (e) {
@@ -215,9 +224,7 @@ Future<void> handleAudioRequest(HttpRequest request) async {
       response.statusCode = HttpStatus.internalServerError;
       response.write('Error: $e');
       await response.close();
-    } catch (_) {
-      debugPrint('Failed to write error response: $_');
-    }
+    } catch (_) {}
   }
 }
 
@@ -251,14 +258,14 @@ Future<AudioSource> getDirectUrlAudioSource(
   return AudioSource.uri(result.url, tag: tag);
 }
 
-Future<Stream<List<int>>> _downloadStream(Uri url, int start, int end) async {
+Future<Stream<List<int>>> _downloadStream(Uri url, int start, int end, {String? userAgent}) async {
   final client = HttpClient();
   try {
     final request = await client.getUrl(url);
     request.headers.add(HttpHeaders.rangeHeader, 'bytes=$start-$end');
-    request.headers.add('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0');
-    request.headers.add('Origin', 'https://music.youtube.com');
-    request.headers.add('Referer', 'https://music.youtube.com/');
+    request.headers.set('User-Agent', userAgent ?? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
+    request.headers.set('Accept', '*/*');
+    request.headers.set('Accept-Language', 'en-US,en;q=0.9');
     final response = await request.close();
     if (response.statusCode == HttpStatus.forbidden) {
       client.close(force: true);

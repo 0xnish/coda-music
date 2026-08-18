@@ -76,14 +76,14 @@ class _AboutPageState extends State<AboutPage> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'CODER-NISHANTH',
+                '0xnish',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 24),
               
               InkWell(
                 onTap: () async {
-                  final uri = Uri.parse('https://github.com/coder-nishanth');
+                  final uri = Uri.parse('https://github.com/0xnish');
                   if (await canLaunchUrl(uri)) {
                     await launchUrl(uri, mode: LaunchMode.externalApplication);
                   }
