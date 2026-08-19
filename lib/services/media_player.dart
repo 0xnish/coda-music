@@ -64,9 +64,6 @@ class MediaPlayer extends ChangeNotifier {
   String? _bufferingResumeId;
 
   bool _handlingCompletion = false;
-  String? _lastCompletionSongId;
-  DateTime? _lastCompletionTime;
-  static const Duration _completionDebounce = Duration(seconds: 2);
 
   MediaPlayer() {
     _player = AudioPlayer();
@@ -216,6 +213,7 @@ class MediaPlayer extends ChangeNotifier {
         _loadingRetryCount = 0;
         _lastFailedVideoId = null;
         _cancelLoadingTimeout();
+        _handlingCompletion = false;
         _buttonState.value = ButtonState.paused;
         notifyListeners();
         return;
@@ -262,6 +260,7 @@ class MediaPlayer extends ChangeNotifier {
         } catch (_) {}
       }
       _progressBarLocked = false;
+      _handlingCompletion = false;
       _buttonState.value = ButtonState.playing;
       notifyListeners();
 
@@ -348,7 +347,9 @@ class MediaPlayer extends ChangeNotifier {
         _cancelLoadingTimeout();
         _loadingRetryCount = 0;
         _lastFailedVideoId = null;
-        _handleSongCompleted();
+        if (!_handlingCompletion && !_isRetrying && !_switching) {
+          _handleSongCompleted();
+        }
       } else {
         _userSeeking = false;
         if (!_switching && !_isRetrying) {
@@ -367,26 +368,14 @@ class MediaPlayer extends ChangeNotifier {
   }
 
   Future<void> _handleSongCompleted() async {
-    final songId = _currentSongNotifier.value?.id;
-    final now = DateTime.now();
     if (_handlingCompletion) return;
-    if (_lastCompletionSongId == songId &&
-        _lastCompletionTime != null &&
-        now.difference(_lastCompletionTime!) < _completionDebounce) {
-      return;
-    }
     _handlingCompletion = true;
-    _lastCompletionSongId = songId;
-    _lastCompletionTime = now;
-    try {
-      await _onSongCompleted();
-    } catch (_) {} finally {
-      _handlingCompletion = false;
-    }
+    await _onSongCompleted();
   }
 
   Future<void> _onSongCompleted() async {
     if (_loopMode.value == LoopMode.one) {
+      _handlingCompletion = false;
       await _player.seek(Duration.zero);
       await _player.play();
       return;
@@ -608,6 +597,7 @@ class MediaPlayer extends ChangeNotifier {
     _retryPending = false;
     _loadingRetryCount = 0;
     _lastFailedVideoId = null;
+    _handlingCompletion = false;
     _switching = true;
     _progressBarLocked = true;
     _bufferingResume = null;
@@ -786,6 +776,7 @@ class MediaPlayer extends ChangeNotifier {
     _retryPending = false;
     _loadingRetryCount = 0;
     _lastFailedVideoId = null;
+    _handlingCompletion = false;
     await _player.stop();
     await _player.clearAudioSources();
     _songList = [];
@@ -1013,11 +1004,10 @@ class MediaPlayer extends ChangeNotifier {
       await _player.play();
       if (seq != _switchSeq) return;
       _switching = false;
+      _handlingCompletion = false;
       _progressBarLocked = false;
       _buttonState.value = ButtonState.playing;
       notifyListeners();
-      _lastCompletionSongId = _songList[index].tag?.id;
-      _lastCompletionTime = DateTime.now();
       _addHistoryForCurrent();
     } catch (e) {
       if (seq != _switchSeq) return;
@@ -1026,12 +1016,14 @@ class MediaPlayer extends ChangeNotifier {
       final tag = _songList[index].tag;
       final id = tag is MediaItem ? tag.id : null;
       if (e is RestrictedStreamException) {
+        _handlingCompletion = false;
         await _skipRestricted(id ?? '');
         return;
       }
       if (id != null) {
         _retryPlayback(id);
       } else {
+        _handlingCompletion = false;
         _buttonState.value = ButtonState.paused;
         notifyListeners();
       }
@@ -1144,6 +1136,11 @@ class MediaPlayer extends ChangeNotifier {
   Future<void> seekTo(Duration position) async {
     _userSeeking = true;
     try {
+      final total = _player.duration ?? Duration.zero;
+      if (total > Duration.zero && position >= total - const Duration(milliseconds: 500)) {
+        await _next(afterCompletion: true);
+        return;
+      }
       await _player.seek(position);
     } catch (_) {
       _userSeeking = false;
