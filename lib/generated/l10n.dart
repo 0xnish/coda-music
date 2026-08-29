@@ -686,12 +686,12 @@ class S {
     );
   }
 
-  String get Equalizer {
-    return Intl.message('Equalizer', name: 'Equalizer', desc: '', args: []);
-  }
-
   String get Sleep_Timer {
     return Intl.message('Sleep Timer', name: 'Sleep_Timer', desc: '', args: []);
+  }
+
+  String get Equalizer {
+    return Intl.message('Equalizer', name: 'Equalizer', desc: '', args: []);
   }
 
   String get Create_Playlist {

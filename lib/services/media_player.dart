@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
-import 'package:Coda/services/equalizer_service.dart';
 import 'package:Coda/services/innertube_player.dart';
+import 'package:Coda/services/equalizer_service.dart';
 import 'package:Coda/services/yt_audio_stream.dart';
 import 'package:Coda/services/blocked_songs.dart';
 import 'package:just_audio/just_audio.dart';
@@ -298,7 +298,7 @@ class MediaPlayer extends ChangeNotifier {
         }
         // A seek of an already-loaded song must not flip the play/pause button
         // to loading (YouTube Music keeps the button as-is while seeking).
-        if (!GetIt.I<EqualizerService>().isApplyingEQ && !_userSeeking) {
+        if (!_userSeeking) {
           _buttonState.value = ButtonState.loading;
         }
         final currentVideoId = _currentSongNotifier.value?.id;
@@ -335,9 +335,9 @@ class MediaPlayer extends ChangeNotifier {
           _buttonState.value =
               isPlaying ? ButtonState.playing : ButtonState.paused;
         }
-        if (isPlaying) {
-          GetIt.I<EqualizerService>().applyEqualizer();
-        }
+        // Re-assert the equalizer on every freshly-loaded track (mpv rebuilds
+        // its audio chain on each open, dropping any previously-set `af`).
+        GetIt.I<EqualizerService>().applyEqualizer(force: true);
       } else if (processingState == ProcessingState.completed) {
         _userSeeking = false;
         if (!_switching && !_isRetrying) {
@@ -849,7 +849,7 @@ class MediaPlayer extends ChangeNotifier {
     try {
       await _player.setSpeed(speed);
     } catch (_) {}
-    await GetIt.I<EqualizerService>().applyEqualizer();
+    await GetIt.I<EqualizerService>().applyEqualizer(force: true);
     notifyListeners();
   }
 
@@ -858,7 +858,7 @@ class MediaPlayer extends ChangeNotifier {
     try {
       await _player.setPitch(pitch);
     } catch (_) {}
-    await GetIt.I<EqualizerService>().applyEqualizer();
+    await GetIt.I<EqualizerService>().applyEqualizer(force: true);
     notifyListeners();
   }
 

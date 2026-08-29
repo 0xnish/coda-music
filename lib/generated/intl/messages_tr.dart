@@ -90,8 +90,8 @@ class MessageLookup extends MessageLookupByLibrary {
     "Downloads": MessageLookupByLibrary.simpleMessage("İndirilenler"),
     "Dynamic_Colors": MessageLookupByLibrary.simpleMessage("Dinamik Renkler"),
     "Enable_Equalizer": MessageLookupByLibrary.simpleMessage(
-      "Ekolayzeri Etkinleştir",
-    ),
+        "Ekolayzeri Etkinleştir",
+      ),
     "Enable_Playback_History": MessageLookupByLibrary.simpleMessage(
       "Yeniden Oynatma Geçmişini Etkinleştir",
     ),
@@ -116,8 +116,8 @@ class MessageLookup extends MessageLookupByLibrary {
     "Jhelum_Corp": MessageLookupByLibrary.simpleMessage("Jhelum Corp"),
     "Language": MessageLookupByLibrary.simpleMessage("Dil"),
     "Loudness_And_Equalizer": MessageLookupByLibrary.simpleMessage(
-      "Ses Yüksekliği ve Ekolayzer",
-    ),
+        "Ses Yüksekliği ve Ekolayzer",
+      ),
     "Loudness_Enhancer": MessageLookupByLibrary.simpleMessage("Ses Yükseltici"),
     "Low": MessageLookupByLibrary.simpleMessage("Düşük"),
     "Made_In_Kashmir": MessageLookupByLibrary.simpleMessage(

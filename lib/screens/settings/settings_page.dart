@@ -76,6 +76,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           title: S.of(context).Equalizer,
                           leading: const Icon(Icons.equalizer),
                           isFirst: true,
+                          isLast: true,
                           onTap: () => context.go('/settings/equalizer'),
                         ),
                         GroupTitle(title: "Privacy"),

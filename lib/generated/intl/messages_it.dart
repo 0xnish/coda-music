@@ -113,8 +113,8 @@ class MessageLookup extends MessageLookupByLibrary {
     "Downloads": MessageLookupByLibrary.simpleMessage("Download"),
     "Dynamic_Colors": MessageLookupByLibrary.simpleMessage("Colori dinamici"),
     "Enable_Equalizer": MessageLookupByLibrary.simpleMessage(
-      "Abilita equalizzatore",
-    ),
+        "Abilita equalizzatore",
+      ),
     "Enable_Playback_History": MessageLookupByLibrary.simpleMessage(
       "Abilita cronologia di riproduzione",
     ),
@@ -142,8 +142,8 @@ class MessageLookup extends MessageLookupByLibrary {
     "Jhelum_Corp": MessageLookupByLibrary.simpleMessage("Jhelum Corp"),
     "Language": MessageLookupByLibrary.simpleMessage("Lingua"),
     "Loudness_And_Equalizer": MessageLookupByLibrary.simpleMessage(
-      "Volume ed equalizzatore",
-    ),
+        "Volume ed equalizzatore",
+      ),
     "Loudness_Enhancer": MessageLookupByLibrary.simpleMessage(
       "Amplificatore volume",
     ),

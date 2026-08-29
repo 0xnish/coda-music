@@ -90,8 +90,8 @@ class MessageLookup extends MessageLookupByLibrary {
     "Downloads": MessageLookupByLibrary.simpleMessage("डाउनलोड"),
     "Dynamic_Colors": MessageLookupByLibrary.simpleMessage("डायनामिक रंग"),
     "Enable_Equalizer": MessageLookupByLibrary.simpleMessage(
-      "इक्वलाइज़र सक्षम करें",
-    ),
+        "इक्वलाइज़र सक्षम करें",
+      ),
     "Enable_Playback_History": MessageLookupByLibrary.simpleMessage(
       "प्लेबैक इतिहास सक्षम करें",
     ),
@@ -116,8 +116,8 @@ class MessageLookup extends MessageLookupByLibrary {
     "Jhelum_Corp": MessageLookupByLibrary.simpleMessage("झेलम कॉर्प"),
     "Language": MessageLookupByLibrary.simpleMessage("भाषा"),
     "Loudness_And_Equalizer": MessageLookupByLibrary.simpleMessage(
-      "लाउडनेस और इक्वलाइज़र",
-    ),
+        "लाउडनेस और इक्वलाइज़र",
+      ),
     "Loudness_Enhancer": MessageLookupByLibrary.simpleMessage(
       "लाउडनेस एन्हांसर",
     ),

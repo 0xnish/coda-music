@@ -88,8 +88,8 @@ class MessageLookup extends MessageLookupByLibrary {
     "Downloads": MessageLookupByLibrary.simpleMessage("ڈاؤن لوڈ"),
     "Dynamic_Colors": MessageLookupByLibrary.simpleMessage("ڈائنامک رنگ"),
     "Enable_Equalizer": MessageLookupByLibrary.simpleMessage(
-      "ایکوالائزر کو فعال کریں",
-    ),
+        "ایکوالائزر کو فعال کریں",
+      ),
     "Enable_Playback_History": MessageLookupByLibrary.simpleMessage(
       "پلے بیک ہسٹری کو فعال کریں",
     ),
@@ -116,8 +116,8 @@ class MessageLookup extends MessageLookupByLibrary {
     "Jhelum_Corp": MessageLookupByLibrary.simpleMessage("جہلم کارپ"),
     "Language": MessageLookupByLibrary.simpleMessage("زبان"),
     "Loudness_And_Equalizer": MessageLookupByLibrary.simpleMessage(
-      "لاؤڈنس اور ایکوالائزر",
-    ),
+        "لاؤڈنس اور ایکوالائزر",
+      ),
     "Loudness_Enhancer": MessageLookupByLibrary.simpleMessage("لاؤڈنس انہینسر"),
     "Low": MessageLookupByLibrary.simpleMessage("کم"),
     "Made_In_Kashmir": MessageLookupByLibrary.simpleMessage(

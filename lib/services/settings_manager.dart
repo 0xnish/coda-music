@@ -78,9 +78,9 @@ class SettingsManager extends ChangeNotifier {
     _downloadQuality =
         _audioQualities[_box.get('DOWNLOAD_QUALITY', defaultValue: 0)];
     _skipSilence = _box.get('SKIP_SILENCE', defaultValue: false);
-    _equalizerEnabled = _box.get('EQUALIZER_ENABLED', defaultValue: false);
     _loudnessEnabled = _box.get('LOUDNESS_ENABLED', defaultValue: false);
     _loudnessTargetGain = _box.get('LOUDNESS_TARGET_GAIN', defaultValue: 0.0);
+    _equalizerEnabled = _box.get('EQUALIZER_ENABLED', defaultValue: false);
     _equalizerBandsGain =
         _box.get('EQUALIZER_BANDS_GAIN', defaultValue: []).cast<double>();
     if (_equalizerBandsGain.length != 10) {
