@@ -23,7 +23,7 @@ class SearchState {
   const SearchState({
     this.uiState = SearchUIState.initial,
     this.query = '',
-    this.selectedType = SearchType.songs,
+    this.selectedType = SearchType.all,
     this.searchHistory = const [],
     this.suggestionQueries = const [],
     this.suggestionItems = const [],
