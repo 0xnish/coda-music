@@ -48,7 +48,7 @@ class HomeCubit extends Cubit<HomeState> {
 
     List<Map<String, dynamic>> sections = [];
 
-    final speedDial = _createSpeedDialSection();
+    final speedDial = _createSpeedDialSection(recommendations);
     if (speedDial != null) sections.add(speedDial);
 
     final quickPicksIdx = ytSections.indexWhere(
@@ -90,8 +90,17 @@ class HomeCubit extends Cubit<HomeState> {
     }
   }
 
-  Map<String, dynamic>? _createSpeedDialSection() {
+  Map<String, dynamic>? _createSpeedDialSection(
+      List<Map<String, dynamic>> recommendations) {
     try {
+      if (recommendations.isNotEmpty) {
+        final items = recommendations.take(24).toList();
+        return {
+          'customType': 'speed_dial',
+          'title': 'Quick Access',
+          'contents': items,
+        };
+      }
       final box = Hive.box('SONG_HISTORY');
       final allSongs = box.values
           .where((s) => s is Map && s['videoId'] != null)
@@ -99,11 +108,11 @@ class HomeCubit extends Cubit<HomeState> {
           .toList();
       if (allSongs.isEmpty) return null;
       allSongs.sort((a, b) =>
-          ((b['plays'] as int? ?? 0)).compareTo((a['plays'] as int? ?? 0)));
+          ((b['updatedAt'] ?? 0)).compareTo((a['updatedAt'] ?? 0)));
       final items = allSongs.take(24).toList();
       return {
         'customType': 'speed_dial',
-        'title': 'Speed Dial',
+        'title': 'Quick Access',
         'contents': items,
       };
     } catch (_) {

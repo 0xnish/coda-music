@@ -19,6 +19,8 @@ import 'services/file_storage.dart';
 import 'services/library.dart';
 import 'services/lyrics.dart';
 import 'services/media_player.dart';
+import 'services/providers/mistral_provider.dart';
+import 'services/providers/google_translate_provider.dart';
 import 'services/settings_manager.dart';
 import 'utils/router.dart';
 import 'ytmusic/ytmusic.dart';
@@ -61,6 +63,8 @@ void main() async {
   GetIt.I.registerSingleton(panelKey);
   GetIt.I.registerSingleton<YTMusic>(ytMusic);
   GetIt.I.registerSingleton<LyricsService>(LyricsService());
+  GetIt.I.registerSingleton<MistralTranslator>(MistralTranslator());
+  GetIt.I.registerSingleton<GoogleTranslateTranslator>(GoogleTranslateTranslator());
 
   runApp(
     MultiProvider(

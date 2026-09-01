@@ -5,6 +5,8 @@ import 'package:get_it/get_it.dart';
 import 'package:Coda/models/lyrics_model.dart';
 import 'package:Coda/services/lyrics.dart';
 import 'package:Coda/services/media_player.dart';
+import 'package:Coda/services/providers/google_translate_provider.dart';
+import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:just_audio/just_audio.dart' show ProcessingState;
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:loading_indicator_m3e/loading_indicator_m3e.dart';
@@ -30,6 +32,81 @@ class _LyricsBoxState extends State<LyricsBox> {
   Future<Lyrics>? _fetchLyricsFuture;
   bool _lyricsLoaded = false;
 
+  bool _translated = false;
+  bool _translating = false;
+  String _targetLanguage = _persistedTargetLanguage;
+  Lyrics? _translatedLyrics;
+  String? _translationRequestLang;
+
+  /// Sentinel selection that shows the original (untranslated) lyrics.
+  static const String _originalLanguage = 'Original';
+
+  /// Last chosen target language, kept across player open/close so a reopened
+  /// lyrics view can resume in the same language.
+  static String _persistedTargetLanguage = _originalLanguage;
+
+  // Translation target languages (from the free Google Translate backend).
+  static const _languages = <String>[
+    'English',
+    'Hindi',
+    'Tamil',
+    'Telugu',
+    'Malayalam',
+    'Kannada',
+    'Bengali',
+    'Punjabi',
+    'Spanish',
+    'French',
+    'German',
+    'Portuguese',
+    'Japanese',
+    'Korean',
+    'Arabic',
+    'Chinese (Simplified)',
+    'Urdu',
+    'Marathi',
+    'Gujarati',
+    'Odia',
+    'Nepali',
+    'Sinhala',
+    'Thai',
+    'Vietnamese',
+    'Indonesian',
+    'Turkish',
+    'Russian',
+    'Italian',
+    'Dutch',
+    'Polish',
+    'Swedish',
+    'Greek',
+    'Hebrew',
+    'Persian',
+    'Romanian',
+    'Ukrainian',
+    'Hungarian',
+    'Czech',
+    'Finnish',
+    'Danish',
+    'Norwegian',
+    'Bulgarian',
+    'Croatian',
+    'Serbian',
+    'Slovak',
+    'Lithuanian',
+    'Latvian',
+    'Estonian',
+    'Slovenian',
+    'Icelandic',
+    'Swahili',
+    'Zulu',
+    'Afrikaans',
+    'Latin',
+    'Welsh',
+    'Irish',
+    'Esperanto',
+    'Kurdish',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -52,6 +129,11 @@ class _LyricsBoxState extends State<LyricsBox> {
   void didUpdateWidget(covariant LyricsBox oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.currentSong.id != oldWidget.currentSong.id) {
+      _translated = false;
+      _translating = false;
+      _translatedLyrics = null;
+      _translationRequestLang = null;
+      _targetLanguage = _persistedTargetLanguage;
       _initFetchLyrics();
     }
   }
@@ -73,12 +155,112 @@ class _LyricsBoxState extends State<LyricsBox> {
                   lyrics.lyricsPlain.isNotEmpty;
           widget.onLyricsFound?.call(_lyricsLoaded);
           _updateWakelock();
+          // Resume in the last chosen language (e.g. when the player screen
+          // is reopened after the miniplayer).
+          if (_targetLanguage != _originalLanguage) {
+            _translationRequestLang = _targetLanguage;
+            if (mounted) _loadTranslation(lyrics);
+          }
         }).catchError((_) {
           _lyricsLoaded = false;
           widget.onLyricsFound?.call(false);
           _updateWakelock();
         });
       });
+    }
+  }
+
+  Future<Lyrics> _translateLyrics(Lyrics lyrics) async {
+    final translator = GetIt.I<GoogleTranslateTranslator>();
+    final parsed = lyrics.parsedLyrics;
+    if (parsed != null && parsed.lyrics.isNotEmpty) {
+      // Translate from the app's parsed lines and rebuild the LRC so the
+      // translated version has exactly the same lines/timestamps as the
+      // original — the highlight stays in sync for every language.
+      final texts = parsed.lyrics.map((l) => l.text).toList();
+      final translatedTexts = await translator.translateLines(
+        texts,
+        language: _targetLanguage,
+      );
+      final sb = StringBuffer();
+      for (var i = 0; i < parsed.lyrics.length; i++) {
+        sb.writeln(
+            '${_lrcTimestamp(parsed.lyrics[i].start)}${translatedTexts[i]}');
+      }
+      final translatedLrc = sb.toString().trim();
+      return lyrics.copyWith(
+        lyricsSynced: translatedLrc,
+        parsedLyrics:
+            ParsedLyrics(syncedLyrics: translatedLrc, duration: lyrics.duration ?? ''),
+      );
+    }
+    final translatedPlain = await translator.translate(
+      text: lyrics.lyricsPlain,
+      language: _targetLanguage,
+    );
+    return lyrics.copyWith(lyricsPlain: translatedPlain);
+  }
+
+  /// Formats a [Duration] as an LRC `[mm:ss.cc] ` timestamp that round-trips
+  /// through `ParsedLyrics`: 2-digit centiseconds for ms divisible by 10,
+  /// otherwise 3-digit milliseconds.
+  static String _lrcTimestamp(Duration d) {
+    final ms = d.inMilliseconds % 1000;
+    final sec = d.inSeconds % 60;
+    final min = d.inMinutes;
+    final two = (d.inMilliseconds % 10 == 0) ? (ms ~/ 10).toString().padLeft(2, '0') : ms.toString().padLeft(3, '0');
+    return '[${min.toString().padLeft(2, '0')}:${sec.toString().padLeft(2, '0')}.$two] ';
+  }
+
+  /// Handles a language selection. Choosing "Original" reverts to the raw
+  /// lyrics; any other choice starts (or re-runs) the translation.
+  void _onLanguageSelected(String language, Lyrics lyrics) {
+    _persistedTargetLanguage = language;
+    if (language == _originalLanguage) {
+      _translationRequestLang = null;
+      setState(() {
+        _targetLanguage = _originalLanguage;
+        _translated = false;
+        _translatedLyrics = null;
+        _translating = false;
+      });
+      return;
+    }
+    setState(() {
+      _targetLanguage = language;
+      _translating = true;
+    });
+    _translationRequestLang = language;
+    _loadTranslation(lyrics);
+  }
+
+  Future<void> _loadTranslation(Lyrics lyrics) async {
+    final requested = _translationRequestLang;
+    if (requested == null) return;
+    setState(() {
+      _translating = true;
+    });
+    try {
+      final translated = await _translateLyrics(lyrics);
+      if (!mounted) return;
+      // Ignore stale results if the user toggled off or picked another
+      // language while this request was in flight.
+      if (_translationRequestLang != requested) return;
+      setState(() {
+        _translatedLyrics = translated;
+        _translated = true;
+        _translating = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      if (_translationRequestLang != requested) return;
+      setState(() {
+        _translating = false;
+        _translated = true;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Translation failed. Check network / try again.')),
+      );
     }
   }
 
@@ -101,7 +283,23 @@ class _LyricsBoxState extends State<LyricsBox> {
                     if (snapshot.data == null) {
                       return const Text('No Lyrics Found (Null)');
                     }
-                    return LoadedLyricsWidget(lyrics: snapshot.data!);
+                    final lyrics = snapshot.data!;
+                    return Column(
+                      children: [
+                        _TranslationControls(
+                          translating: _translating,
+                          targetLanguage: _targetLanguage,
+                          languages: _languages,
+                          onLanguageChanged: (lang) =>
+                              _onLanguageSelected(lang, lyrics),
+                        ),
+                        Expanded(
+                          child: LoadedLyricsWidget(
+                            lyrics: _translated ? (_translatedLyrics ?? lyrics) : lyrics,
+                          ),
+                        ),
+                      ],
+                    );
                   }
                   if (snapshot.hasError) {
                     return const Text('No Lyrics Found');
@@ -110,6 +308,263 @@ class _LyricsBoxState extends State<LyricsBox> {
                 },
               )
             : const ExpressiveLoadingIndicator(),
+      ),
+    );
+  }
+}
+
+class _TranslationControls extends StatefulWidget {
+  const _TranslationControls({
+    required this.translating,
+    required this.targetLanguage,
+    required this.languages,
+    required this.onLanguageChanged,
+  });
+
+  final bool translating;
+  final String targetLanguage;
+  final List<String> languages;
+  final ValueChanged<String> onLanguageChanged;
+
+  @override
+  State<_TranslationControls> createState() => _TranslationControlsState();
+}
+
+class _TranslationControlsState extends State<_TranslationControls> {
+  final TextEditingController _searchController = TextEditingController();
+  late final ValueNotifier<String?> _value =
+      ValueNotifier<String?>(widget.targetLanguage);
+
+  @override
+  void didUpdateWidget(covariant _TranslationControls oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.targetLanguage != widget.targetLanguage) {
+      _value.value = widget.targetLanguage;
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _value.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final allLanguages = [
+      _LyricsBoxState._originalLanguage,
+      ...widget.languages,
+    ];
+
+    return Center(
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton2<String>(
+          valueListenable: _value,
+          hint: Text(
+            'Select language',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.white.withValues(alpha: 0.6),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          items: allLanguages
+              .map(
+                (language) => DropdownItem<String>(
+                  value: language,
+                  height: 34,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.max,
+                    children: [
+                      // Fixed-width leading slot keeps every item's text
+                      // left-aligned; the music icon marks the selected
+                      // language only.
+                      SizedBox(
+                        width: 18,
+                        height: 16,
+                        child: language == widget.targetLanguage
+                            ? const Icon(
+                                Icons.music_note_outlined,
+                                size: 16,
+                                color: Colors.white,
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          language,
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: widget.targetLanguage == language
+                                ? Colors.white
+                                : Colors.white70,
+                            fontWeight: widget.targetLanguage == language
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+              .toList(),
+          // Builds the button content: the selected language only. While
+          // translating, the dropdown arrow is swapped for a small loading
+          // indicator (see iconStyleData). No Flexible here: the button can
+          // be measured under unbounded width, which a flex child rejects.
+          selectedItemBuilder: (context) {
+            return allLanguages.map(
+              (language) {
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Fixed-width leading slot matching the menu items.
+                    const SizedBox(
+                      width: 18,
+                      height: 16,
+                      child: Icon(
+                        Icons.music_note_outlined,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // 200 (button) - 28 (padding) - 18 (icon) - 8 (gap) - 22
+                    // (arrow) keeps the text clipped instead of overflowing.
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 124),
+                      child: Text(
+                        language,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+          onChanged: (value) {
+            if (value != null) widget.onLanguageChanged(value);
+          },
+          buttonStyleData: ButtonStyleData(
+            height: 40,
+            width: 200,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.18),
+              ),
+              color: Colors.white.withValues(alpha: 0.08),
+            ),
+            elevation: 0,
+          ),
+          iconStyleData: IconStyleData(
+            // Swap the arrow for a small loading indicator while translating.
+            // LoadingIndicatorM3E renders at ~38px minimum, so scale it down.
+            icon: widget.translating
+                ? SizedBox(
+                    width: 26,
+                    height: 26,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: LoadingIndicatorM3E(color: Colors.white),
+                    ),
+                  )
+                : const Icon(Icons.keyboard_arrow_down_rounded),
+            iconSize: 22,
+            iconEnabledColor:
+                Colors.white.withValues(alpha: widget.translating ? 0.8 : 0.85),
+            iconDisabledColor: Colors.white.withValues(alpha: 0.3),
+          ),
+          dropdownStyleData: DropdownStyleData(
+            maxHeight: 260,
+            width: 200,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              color: Colors.grey.shade900,
+            ),
+            elevation: 6,
+            // On desktop dropdown_button2 hardcodes thumbVisibility to true (theme is
+            // only used on iOS), so zero out the thumb thickness to hide it.
+            scrollbarTheme: const ScrollbarThemeData(
+              thumbVisibility: WidgetStatePropertyAll(false),
+              trackVisibility: WidgetStatePropertyAll(false),
+              thickness: WidgetStatePropertyAll(0),
+            ),
+          ),
+          menuItemStyleData: const MenuItemStyleData(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+            overlayColor: WidgetStatePropertyAll(
+              Colors.white12,
+            ),
+          ),
+          dropdownSearchData: DropdownSearchData(
+            searchController: _searchController,
+            searchBarWidgetHeight: 46,
+            searchBarWidget: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+              child: TextField(
+                controller: _searchController,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Search',
+                  hintStyle: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.4),
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    color: Colors.white.withValues(alpha: 0.5),
+                    size: 18,
+                  ),
+                  isDense: true,
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.06),
+                  contentPadding:
+                      const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide:
+                        BorderSide(color: Colors.white.withValues(alpha: 0.15)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide:
+                        BorderSide(color: Colors.white.withValues(alpha: 0.35)),
+                  ),
+                ),
+              ),
+            ),
+            searchMatchFn: (item, searchValue) => item.value
+                .toString()
+                .toLowerCase()
+                .contains(searchValue.toLowerCase()),
+            noResultsWidget: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                'No language found',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ),
+          onMenuStateChange: (isOpen) {
+            if (!isOpen) _searchController.clear();
+          },
+        ),
       ),
     );
   }
@@ -227,8 +682,12 @@ class _SyncedLyricsWidgetState extends State<SyncedLyricsWidget> {
         final newIndex = _findCurrentLyricIndex();
 
         if (!_initialScrollDone) {
-          _initialScrollDone = true;
           _currentLyricIndex = newIndex;
+          // Only consider the initial scroll done when it can actually
+          // happen (the list may not be attached on the first tick yet).
+          if (_itemScrollController.isAttached && !_isUserScrolling) {
+            _initialScrollDone = true;
+          }
           _scrollToCurrentLyric(newIndex);
           return;
         }
@@ -242,14 +701,28 @@ class _SyncedLyricsWidgetState extends State<SyncedLyricsWidget> {
       });
     } catch (e) {
     }
+
+    // Park the lyrics centered (first line) right away, e.g. when the lyrics
+    // finish loading before the first line has started playing.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scrollToCurrentLyric(_currentLyricIndex);
+    });
   }
 
   @override
   void didUpdateWidget(covariant SyncedLyricsWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(widget.lyrics, oldWidget.lyrics)) {
-      _currentLyricIndex = -1;
-      _initialScrollDone = false;
+      // Lyrics changed (e.g. translation finished). Re-locate the current
+      // line immediately instead of waiting for the next position tick.
+      _currentLyricIndex = _findCurrentLyricIndex();
+      _initialScrollDone = _currentLyricIndex >= 0;
+      if (mounted) {
+        setState(() {});
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _scrollToCurrentLyric(_currentLyricIndex);
+        });
+      }
     }
   }
 
@@ -261,14 +734,42 @@ class _SyncedLyricsWidgetState extends State<SyncedLyricsWidget> {
   }
 
   void _scrollToCurrentLyric(int index) {
-    if (index < 0) return;
-    if (_itemScrollController.isAttached && !_isUserScrolling) {
+    if (_isUserScrolling) return;
+    if (index < 0) {
+      _parkCentered();
+      return;
+    }
+    if (_itemScrollController.isAttached) {
       _itemScrollController.scrollTo(
         index: index,
         duration: const Duration(milliseconds: 700),
         curve: Curves.easeOutCubic,
-        alignment: 0.44,
+        alignment: 0.30,
       );
+    }
+  }
+
+  /// Parks the first lyric line in the vertical center before playback
+  /// reaches it. Retries across frames until the list is attached, so
+  /// fast-loading lyrics always land centered even if the first tick or
+  /// post-frame happens before the list is laid out. Alignment 0.34 (above
+  /// the raw midpoint) so the multi-line text block, not just the first
+  /// line, sits centered; same reading comfort as the active line (0.30).
+  int _parkRetries = 0;
+
+  void _parkCentered() {
+    if (!mounted || _isUserScrolling) return;
+    if (_itemScrollController.isAttached) {
+      _itemScrollController.scrollTo(
+        index: 0,
+        alignment: 0.34,
+        duration: const Duration(milliseconds: 700),
+        curve: Curves.easeOutCubic,
+      );
+      _parkRetries = 0;
+    } else if (_parkRetries < 30) {
+      _parkRetries++;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _parkCentered());
     }
   }
 
