@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'typography.dart';
+import 'text_styles.dart';
 
 class AppTheme {
   static ThemeData light({Color? primary}) {
@@ -29,9 +30,10 @@ class AppTheme {
         selectedIconTheme: const IconThemeData(color: Colors.white),
         indicatorColor: Colors.black,
         labelType: NavigationRailLabelType.all,
-        selectedLabelTextStyle: const TextStyle(color: Colors.black, fontSize: 11),
-        unselectedLabelTextStyle:
-            TextStyle(color: Colors.black.withValues(alpha: 0.6), fontSize: 11),
+        selectedLabelTextStyle:
+            defaultFontStyle.copyWith(color: Colors.black, fontSize: 11),
+        unselectedLabelTextStyle: defaultFontStyle.copyWith(
+            color: Colors.black.withValues(alpha: 0.6), fontSize: 11),
       ),
       switchTheme: SwitchThemeData(
         overlayColor: WidgetStateProperty.all(Colors.transparent),
@@ -80,9 +82,10 @@ class AppTheme {
         selectedIconTheme: const IconThemeData(color: Colors.black),
         indicatorColor: Colors.white,
         labelType: NavigationRailLabelType.all,
-        selectedLabelTextStyle: const TextStyle(color: Colors.black, fontSize: 11, fontWeight: FontWeight.bold),
-        unselectedLabelTextStyle:
-            TextStyle(color: Colors.black.withValues(alpha: 0.6), fontSize: 11),
+        selectedLabelTextStyle:
+            defaultFontStyle.copyWith(color: Colors.black, fontSize: 11, fontWeight: FontWeight.bold),
+        unselectedLabelTextStyle: defaultFontStyle.copyWith(
+            color: Colors.black.withValues(alpha: 0.6), fontSize: 11),
       ),
       switchTheme: SwitchThemeData(
         overlayColor: WidgetStateProperty.all(Colors.transparent),

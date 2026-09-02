@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'text_styles.dart';
+
 TextTheme appTextTheme(TextTheme? textTheme) {
   textTheme ??= ThemeData.light().textTheme;
 
@@ -109,5 +111,8 @@ TextTheme appTextTheme(TextTheme? textTheme) {
       height: 16 / 11,
       letterSpacing: 0.5,
     ),
+  ).apply(
+    fontFamily: defaultFontStyle.fontFamily,
+    fontFamilyFallback: defaultFontStyle.fontFamilyFallback,
   );
 }
