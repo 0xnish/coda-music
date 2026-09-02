@@ -87,7 +87,6 @@ class YouTubeAudioSource extends StreamAudioSource {
           contentType: streamInfo.mimeType,
         );
       } on RestrictedStreamException catch (_) {
-        // Clear cache so next call fetches fresh URL
         _cachedStream = null;
         InnertubePlayer.instance.removeFromCache(videoId);
 

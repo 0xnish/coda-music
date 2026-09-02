@@ -176,7 +176,6 @@ class InnertubePlayer {
     } catch (_) {}
   }
 
-  // --- yt-dlp (slow but handles n-param + signature decryption) ---
 
   static String? _pythonPath;
   static bool? _ytDlpAvailable;
@@ -291,7 +290,6 @@ class InnertubePlayer {
     }
   }
 
-  // --- Main entry: InnerTube first (instant), yt-dlp only on 403 ---
 
   Future<InnertubeStreamInfo?> getStreamInfo(
     String videoId, {
@@ -301,7 +299,6 @@ class InnertubePlayer {
       return _cache[videoId];
     }
 
-    // Fast path: InnerTube API (instant URL extraction)
     await _ensureVisitorData();
     for (final client in _clientOrder) {
       try {
@@ -318,8 +315,6 @@ class InnertubePlayer {
     return null;
   }
 
-  /// Called when an InnerTube URL returns 403 during download.
-  /// Falls back to yt-dlp which decrypts n-param/signature.
   Future<InnertubeStreamInfo?> refreshWithYtDlp(
     String videoId, {
     String quality = 'high',

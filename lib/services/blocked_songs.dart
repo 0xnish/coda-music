@@ -1,8 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
-/// Tracks songs that YouTube has flagged as restricted/unavailable so they
-/// stop reappearing in queues and lists. Persisted in the 'BLOCKED_SONGS' box.
 class BlockedSongs extends ChangeNotifier {
   static BlockedSongs? _instance;
   static BlockedSongs get instance => _instance ??= BlockedSongs._();
@@ -29,13 +27,11 @@ class BlockedSongs extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Whether [videoId] should be hidden from lists (respects [enabled]).
   bool contains(String? videoId) {
     if (!_enabled || videoId == null || videoId.isEmpty) return false;
     return _ids.contains(videoId);
   }
 
-  /// Whether [videoId] is blocked regardless of the hide toggle.
   bool isBlocked(String? videoId) {
     if (videoId == null || videoId.isEmpty) return false;
     return _ids.contains(videoId);

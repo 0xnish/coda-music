@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:get_it/get_it.dart';
@@ -38,14 +38,10 @@ class _LyricsBoxState extends State<LyricsBox> {
   Lyrics? _translatedLyrics;
   String? _translationRequestLang;
 
-  /// Sentinel selection that shows the original (untranslated) lyrics.
   static const String _originalLanguage = 'Original';
 
-  /// Last chosen target language, kept across player open/close so a reopened
-  /// lyrics view can resume in the same language.
   static String _persistedTargetLanguage = _originalLanguage;
 
-  // Translation target languages (from the free Google Translate backend).
   static const _languages = <String>[
     'English',
     'Hindi',
@@ -155,8 +151,6 @@ class _LyricsBoxState extends State<LyricsBox> {
                   lyrics.lyricsPlain.isNotEmpty;
           widget.onLyricsFound?.call(_lyricsLoaded);
           _updateWakelock();
-          // Resume in the last chosen language (e.g. when the player screen
-          // is reopened after the miniplayer).
           if (_targetLanguage != _originalLanguage) {
             _translationRequestLang = _targetLanguage;
             if (mounted) _loadTranslation(lyrics);
@@ -174,9 +168,6 @@ class _LyricsBoxState extends State<LyricsBox> {
     final translator = GetIt.I<GoogleTranslateTranslator>();
     final parsed = lyrics.parsedLyrics;
     if (parsed != null && parsed.lyrics.isNotEmpty) {
-      // Translate from the app's parsed lines and rebuild the LRC so the
-      // translated version has exactly the same lines/timestamps as the
-      // original â€” the highlight stays in sync for every language.
       final texts = parsed.lyrics.map((l) => l.text).toList();
       final translatedTexts = await translator.translateLines(
         texts,
@@ -201,9 +192,6 @@ class _LyricsBoxState extends State<LyricsBox> {
     return lyrics.copyWith(lyricsPlain: translatedPlain);
   }
 
-  /// Formats a [Duration] as an LRC `[mm:ss.cc] ` timestamp that round-trips
-  /// through `ParsedLyrics`: 2-digit centiseconds for ms divisible by 10,
-  /// otherwise 3-digit milliseconds.
   static String _lrcTimestamp(Duration d) {
     final ms = d.inMilliseconds % 1000;
     final sec = d.inSeconds % 60;
@@ -212,8 +200,6 @@ class _LyricsBoxState extends State<LyricsBox> {
     return '[${min.toString().padLeft(2, '0')}:${sec.toString().padLeft(2, '0')}.$two] ';
   }
 
-  /// Handles a language selection. Choosing "Original" reverts to the raw
-  /// lyrics; any other choice starts (or re-runs) the translation.
   void _onLanguageSelected(String language, Lyrics lyrics) {
     _persistedTargetLanguage = language;
     if (language == _originalLanguage) {
@@ -243,8 +229,6 @@ class _LyricsBoxState extends State<LyricsBox> {
     try {
       final translated = await _translateLyrics(lyrics);
       if (!mounted) return;
-      // Ignore stale results if the user toggled off or picked another
-      // language while this request was in flight.
       if (_translationRequestLang != requested) return;
       setState(() {
         _translatedLyrics = translated;
@@ -446,8 +430,6 @@ class _SyncedLyricsWidgetState extends State<SyncedLyricsWidget> {
 
         if (!_initialScrollDone) {
           _currentLyricIndex = newIndex;
-          // Only consider the initial scroll done when it can actually
-          // happen (the list may not be attached on the first tick yet).
           if (_itemScrollController.isAttached && !_isUserScrolling) {
             _initialScrollDone = true;
           }
@@ -465,8 +447,6 @@ class _SyncedLyricsWidgetState extends State<SyncedLyricsWidget> {
     } catch (e) {
     }
 
-    // Park the lyrics centered (first line) right away, e.g. when the lyrics
-    // finish loading before the first line has started playing.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _scrollToCurrentLyric(_currentLyricIndex);
     });
@@ -476,8 +456,6 @@ class _SyncedLyricsWidgetState extends State<SyncedLyricsWidget> {
   void didUpdateWidget(covariant SyncedLyricsWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(widget.lyrics, oldWidget.lyrics)) {
-      // Lyrics changed (e.g. translation finished). Re-locate the current
-      // line immediately instead of waiting for the next position tick.
       _currentLyricIndex = _findCurrentLyricIndex();
       _initialScrollDone = _currentLyricIndex >= 0;
       if (mounted) {
@@ -512,12 +490,6 @@ class _SyncedLyricsWidgetState extends State<SyncedLyricsWidget> {
     }
   }
 
-  /// Parks the first lyric line in the vertical center before playback
-  /// reaches it. Retries across frames until the list is attached, so
-  /// fast-loading lyrics always land centered even if the first tick or
-  /// post-frame happens before the list is laid out. Alignment 0.34 (above
-  /// the raw midpoint) so the multi-line text block, not just the first
-  /// line, sits centered; same reading comfort as the active line (0.30).
   int _parkRetries = 0;
 
   void _parkCentered() {

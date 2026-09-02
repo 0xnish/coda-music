@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:loading_indicator_m3e/loading_indicator_m3e.dart';
 import 'package:scroll_animator/scroll_animator.dart';
 
-/// A single selectable entry inside a [ChromeDropdown] menu.
 class ChromeDropdownItem<T> {
   const ChromeDropdownItem({required this.value, required this.label});
 
@@ -12,11 +11,6 @@ class ChromeDropdownItem<T> {
   final String label;
 }
 
-/// A button that opens a popup menu scrolling with Chromium easing.
-///
-/// Uses the same `scroll_animator` powered menu as the lyrics language
-/// picker. Colors adapt to the ambient theme, so it works in both light and
-/// dark UIs.
 class ChromeDropdown<T> extends StatefulWidget {
   const ChromeDropdown({
     super.key,
@@ -38,30 +32,21 @@ class ChromeDropdown<T> extends StatefulWidget {
   final List<ChromeDropdownItem<T>> items;
   final ValueChanged<T?> onChanged;
 
-  /// Placeholder text when no value is selected.
   final String hint;
 
-  /// Button size.
   final double width;
   final double height;
 
-  /// Height of a single menu item.
   final double itemHeight;
 
-  /// Maximum height of the scrolling menu list.
   final double menuMaxHeight;
 
-  /// When true, a search field is shown at the top of the menu.
   final bool enableSearch;
 
-  /// When true, the trailing arrow turns into a small loading indicator.
   final bool loading;
 
-  /// When set, a fixed leading slot is reserved in the button and in every
-  /// menu item; the icon is lit for the selected item only.
   final IconData? selectionIcon;
 
-  /// Text style for the button label and the menu items.
   final TextStyle? textStyle;
 
   @override
@@ -100,9 +85,6 @@ class _ChromeDropdownState<T> extends State<ChromeDropdown<T>> {
         final overlayRender =
             Overlay.of(context).context.findRenderObject() as RenderBox?;
         final rect = box.localToGlobal(Offset.zero, ancestor: overlayRender);
-        // The menu only reaches its max height when it has enough items, so
-        // compute its actual height for positioning (otherwise a short menu
-        // placed above the button would float far away from it).
         final searchFieldHeight = widget.enableSearch ? 54.0 : 0.0;
         final itemAreaHeight = math.min(
           widget.items.length * widget.itemHeight,
@@ -111,8 +93,6 @@ class _ChromeDropdownState<T> extends State<ChromeDropdown<T>> {
         final menuHeight = searchFieldHeight + 8 + itemAreaHeight;
         return LayoutBuilder(
           builder: (context, constraints) {
-            // Show below the button, flipping above it when it would clip the
-            // bottom of the window.
             final below = rect.dy + widget.height + 8;
             final top = below + menuHeight > constraints.maxHeight
                 ? math.max(8.0, rect.dy - menuHeight - 8)
@@ -256,7 +236,6 @@ class _ChromeDropdownMenuState<T> extends State<_ChromeDropdownMenu<T>> {
   @override
   void initState() {
     super.initState();
-    // Chrome-style idle-smooth scrolling for the menu list.
     _scrollController = AnimatedScrollController(
       animationFactory: const ChromiumEaseInOut(),
     );
@@ -364,8 +343,6 @@ class _ChromeDropdownMenuState<T> extends State<_ChromeDropdownMenu<T>> {
                       ),
                     )
                   : ScrollConfiguration(
-                      // Keep the dropdown scrollbar hidden, matching other
-                      // menus in the app.
                       behavior: ScrollConfiguration.of(context)
                           .copyWith(scrollbars: false),
                       child: ListView.builder(
@@ -428,8 +405,6 @@ class _ChromeDropdownMenuItem extends StatelessWidget {
           child: Row(
             children: [
               if (selectionIcon != null) ...[
-                // Fixed-width leading slot keeps every item's text left-aligned;
-                // the icon only lights up for the selected item.
                 SizedBox(
                   width: 18,
                   height: 16,

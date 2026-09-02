@@ -2,16 +2,10 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-/// Free lyric translation backed by Google Translate's public web endpoint.
-///
-/// No API key required and supports 100+ languages. Because the endpoint is
-/// unofficial, it can be throttled or changed by Google over time.
 class GoogleTranslateTranslator {
   static const String baseUrl =
       'https://translate.googleapis.com/translate_a/single';
 
-  /// A curated list of commonly used translation target languages.
-  /// Value is the Google Translate language code.
   static const Map<String, String> languages = <String, String>{
     'English': 'en',
     'Afrikaans': 'af',
@@ -120,7 +114,6 @@ class GoogleTranslateTranslator {
     'Zulu': 'zu',
   };
 
-  /// In-memory cache keyed by (language, text) so repeats return instantly.
   final Map<String, String> _cache = {};
   static const int _maxCacheEntries = 300;
 
@@ -129,7 +122,6 @@ class GoogleTranslateTranslator {
 
   void clearCache() => _cache.clear();
 
-  /// Translates [text] into the language named by [language].
   Future<String> translate({
     required String text,
     required String language,
@@ -147,12 +139,6 @@ class GoogleTranslateTranslator {
     return result;
   }
 
-  /// Translates a list of lyric text lines into [language], preserving the
-  /// order and count of the input. Lines are translated concurrently
-  /// (bounded) so a long song takes a few round-trips instead of one per line.
-  ///
-  /// A line that yields an empty translation keeps its original text so the
-  /// resulting lyric structure (line count / timing) never changes.
   Future<List<String>> translateLines(
     List<String> lines, {
     required String language,
@@ -160,7 +146,6 @@ class GoogleTranslateTranslator {
     if (lines.isEmpty) return lines;
     final languageCode = languages[language] ?? 'en';
 
-    // Max HTTP requests in flight at once.
     const maxConcurrent = 15;
 
     final resolved = List<String>.filled(lines.length, '');
@@ -181,7 +166,6 @@ class GoogleTranslateTranslator {
       }
     }
 
-    // Resolve pending lines with a simple bounded worker pool.
     var cursor = 0;
     Future<void> worker() async {
       while (true) {

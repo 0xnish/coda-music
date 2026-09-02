@@ -18,8 +18,6 @@ import 'settings_manager.dart';
 class MediaPlayer extends ChangeNotifier {
   late final AudioPlayer _player;
 
-  // The queue in its ORIGINAL order (never reordered for shuffle, like
-  // Metrolist's timeline). Shuffle is only an index permutation on top of it.
   List<IndexedAudioSource> _songList = [];
   final Map<String, IndexedAudioSource> _sourceCache = {};
   final ValueNotifier<MediaItem?> _currentSongNotifier = ValueNotifier(null);
@@ -34,8 +32,6 @@ class MediaPlayer extends ChangeNotifier {
   final ValueNotifier<ProgressBarState> _progressBarState =
       ValueNotifier(ProgressBarState());
 
-  // Metrolist-style shuffle: a permutation of indices with the current song
-  // first. Empty when shuffle is disabled. The queue itself is never touched.
   bool _shuffleModeEnabled = false;
   List<int> _shuffleOrder = [];
 
@@ -189,8 +185,6 @@ class MediaPlayer extends ChangeNotifier {
   }
 
   Future<void> _restorePosition(Duration resume) async {
-    // Keep the bar frozen while the player's position is restored so a stale
-    // (reset) position never overwrites the frozen thumb.
     try {
       await _player.seek(resume);
     } catch (_) {}
@@ -237,8 +231,6 @@ class MediaPlayer extends ChangeNotifier {
       _sourceCache.remove(videoId);
       InnertubePlayer.instance.removeFromCache(videoId);
 
-      // Freeze the bar at the last good position so a mid-song hiccup does not
-      // visually jump to 0; restore and resume once the reload succeeds.
       final savedBar = _progressBarState.value;
       _progressBarLocked = true;
       _buttonState.value = ButtonState.loading;
@@ -251,8 +243,6 @@ class MediaPlayer extends ChangeNotifier {
       await _player.setAudioSource(source);
       await _player.play();
 
-      // Same song: restore the frozen visuals, then seek back to where we were
-      // so the thumb never jumps to 0 (YouTube Music behavior).
       _progressBarState.value = savedBar;
       if (savedBar.current > Duration.zero) {
         try {
@@ -285,9 +275,6 @@ class MediaPlayer extends ChangeNotifier {
       if (processingState == ProcessingState.loading ||
           processingState == ProcessingState.buffering) {
         _progressBarLocked = true;
-        // Mid-song hiccup: remember where playback was so we can restore it
-        // once ready again (the player may reset its position on re-request).
-        // Never for a user seek (that would undo the seek).
         if (processingState == ProcessingState.buffering &&
             !_switching &&
             !_isRetrying &&
@@ -296,8 +283,6 @@ class MediaPlayer extends ChangeNotifier {
           _bufferingResume = _progressBarState.value.current;
           _bufferingResumeId = _currentSongNotifier.value?.id;
         }
-        // A seek of an already-loaded song must not flip the play/pause button
-        // to loading (YouTube Music keeps the button as-is while seeking).
         if (!_userSeeking) {
           _buttonState.value = ButtonState.loading;
         }
@@ -335,8 +320,6 @@ class MediaPlayer extends ChangeNotifier {
           _buttonState.value =
               isPlaying ? ButtonState.playing : ButtonState.paused;
         }
-        // Re-assert the equalizer on every freshly-loaded track (mpv rebuilds
-        // its audio chain on each open, dropping any previously-set `af`).
         GetIt.I<EqualizerService>().applyEqualizer(force: true);
       } else if (processingState == ProcessingState.completed) {
         _userSeeking = false;
@@ -445,9 +428,6 @@ class MediaPlayer extends ChangeNotifier {
       final oldState = _progressBarState.value;
       final total = position ?? Duration.zero;
       if (oldState.total != total) {
-        // just_audio can briefly report null/0 at stream chunk boundaries;
-        // never regress a known duration to 0 (that makes the thumb jump to
-        // the start). A fresh song resets total to 0 via _resetProgressBar.
         if (oldState.total > Duration.zero && total == Duration.zero) {
           return;
         }
@@ -518,8 +498,6 @@ class MediaPlayer extends ChangeNotifier {
     _emit();
   }
 
-  // Metrolist: build a shuffled permutation of the queue with the current
-  // song first. The queue itself is never reordered.
   void _enableShuffle() {
     final n = _songList.length;
     _shuffleOrder = [];
@@ -895,7 +873,6 @@ class MediaPlayer extends ChangeNotifier {
     _emit();
   }
 
-  // ---- Navigation (Metrolist: order is the permutation, not the queue) ----
 
   Future<void> next() => _next(afterCompletion: false);
 
@@ -946,8 +923,6 @@ class MediaPlayer extends ChangeNotifier {
     return t is MediaItem && BlockedSongs.instance.contains(t.id);
   }
 
-  /// First unblocked display position strictly after [from] (in the effective
-  /// order), or null if none exists.
   int? _nextPlayablePos(List<int> eff, int from, {required bool wrap}) {
     for (var i = 1; i < eff.length; i++) {
       final p = wrap ? (from + i) % eff.length : from + i;
@@ -957,8 +932,6 @@ class MediaPlayer extends ChangeNotifier {
     return null;
   }
 
-  /// First unblocked display position strictly before [from] (in the effective
-  /// order), or null if none exists.
   int? _prevPlayablePos(List<int> eff, int from, {required bool wrap}) {
     for (var i = 1; i < eff.length; i++) {
       final p = wrap ? (from - i) % eff.length : from - i;
@@ -977,8 +950,6 @@ class MediaPlayer extends ChangeNotifier {
       return;
     }
     final seq = ++_switchSeq;
-    // Instant, visible switch: the UI moves immediately and only the latest
-    // request wins. Stale loads abandon themselves before touching the player.
     _syncIndex(index);
     _retryPending = false;
     _switching = true;
@@ -1040,7 +1011,6 @@ class MediaPlayer extends ChangeNotifier {
       BlockedSongs.instance.block(videoId);
     }
 
-    // Remove the blocked song by id, never the currently playing song.
     int target = -1;
     for (var i = 0; i < _songList.length; i++) {
       final t = _songList[i].tag;
@@ -1075,7 +1045,6 @@ class MediaPlayer extends ChangeNotifier {
       return;
     }
 
-    // The song that followed the blocked one is the next to play.
     int? next;
     if (_shuffleModeEnabled &&
         _shuffleOrder.length == _songList.length) {
@@ -1130,9 +1099,6 @@ class MediaPlayer extends ChangeNotifier {
     await _player.play();
   }
 
-  /// User-initiated seek (bar drag, +10s/-10s, lyrics). During the seek the
-  /// play/pause button must NOT flip to loading, and seek buffering must not be
-  /// treated as a mid-song hiccup (which would try to restore the old position).
   Future<void> seekTo(Duration position) async {
     _userSeeking = true;
     try {
