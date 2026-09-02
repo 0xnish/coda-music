@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AnimatedCodaTitle extends StatefulWidget {
   final double fontSize;
@@ -47,10 +48,15 @@ class _AnimatedCodaTitleState extends State<AnimatedCodaTitle>
   }
 
   void _buildCache() {
-    final textStyle = TextStyle(
-      color: Colors.white,
+    final textStyle = GoogleFonts.poppins(
+      textStyle: const TextStyle(
+        color: Colors.white,
+        fontSize: 15,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1.2,
+      ),
+    ).copyWith(
       fontSize: widget.fontSize,
-      fontWeight: FontWeight.bold,
       letterSpacing: widget.letterSpacing,
     );
     _cachedWidgets = List.generate(_text.length, (index) {
