@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:flutter/foundation.dart' show compute;
 import 'package:Coda/ytmusic/ytmusic.dart';
-import 'package:Coda/services/chart_model.dart';
 import 'package:Coda/services/home_fetchers.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:meta/meta.dart';
@@ -37,14 +36,6 @@ class HomeCubit extends Cubit<HomeState> {
     final moodAndGenresResult =
         result['moodAndGenres'] as List<Map<String, dynamic>>;
     final trending = result['trending'] as List<Map<String, dynamic>>;
-    final chartsData = result['charts'] as List<Map<String, dynamic>>;
-    final charts = chartsData
-        .map((c) => ChartURL(
-              title: c['title'] as String,
-              url: c['url'] as String,
-              coverArt: c['coverArt'] as String?,
-            ))
-        .toList();
 
     List<Map<String, dynamic>> sections = [];
 
@@ -69,7 +60,7 @@ class HomeCubit extends Cubit<HomeState> {
     if (trending.isNotEmpty) {
       sections.add(_createTrendingSection(trending));
     }
-    sections.add(_createChartsSection(charts));
+    sections.add(_createChartsPreviewSection());
     sections.addAll(ytSections);
 
     return HomeSuccess(
@@ -158,25 +149,11 @@ class HomeCubit extends Cubit<HomeState> {
     };
   }
 
-  Map<String, dynamic> _createChartsSection(List<ChartURL> charts) {
+  Map<String, dynamic> _createChartsPreviewSection() {
     return {
+      'customType': 'charts_preview',
       'title': 'Browse Charts',
-      'contents': charts
-          .map((chart) => {
-                'title': chart.title,
-                'subtitle': 'Billboard Chart',
-                'thumbnails': [
-                  {
-                    'url': chart.coverArt ??
-                        'https://www.billboard.com/wp-content/themes/vip/pmc-billboard-2021/assets/app/icons/icon-512x512.png',
-                    'width': 500,
-                    'height': 500
-                  }
-                ],
-                'chartUrl': chart,
-                'aspectRatio': 1.0,
-              })
-          .toList(),
+      'contents': <Map<String, dynamic>>[],
     };
   }
 

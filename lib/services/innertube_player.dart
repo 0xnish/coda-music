@@ -257,7 +257,7 @@ class InnertubePlayer {
       );
 
       final stdoutStr = await stdoutFuture;
-      final stderrStr = await stderrFuture;
+      await stderrFuture;
 
       if (exitCode != 0) return null;
 

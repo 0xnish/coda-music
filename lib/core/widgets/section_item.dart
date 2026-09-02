@@ -13,6 +13,8 @@ import 'package:Coda/ytmusic/ytmusic.dart';
 
 import '../../generated/l10n.dart';
 import '../../services/bottom_message.dart';
+import '../../services/chart_model.dart';
+import '../../services/charts_service.dart';
 import '../../themes/text_styles.dart';
 import '../../utils/adaptive_widgets/adaptive_widgets.dart';
 import '../../utils/enhanced_image.dart';
@@ -131,6 +133,9 @@ class _SectionItemState extends State<SectionItem> {
           const SizedBox(height: 12),
         ],
       );
+    }
+    if (customType == 'charts_preview') {
+      return const ChartsPreviewSection();
     }
     return widget.section['contents'].isEmpty
         ? const SizedBox()
@@ -261,6 +266,72 @@ class _SectionItemState extends State<SectionItem> {
                     onPressed: loadMoreItems, child: const Text("Load More"))
             ],
           );
+  }
+}
+
+class ChartsPreviewSection extends StatefulWidget {
+  const ChartsPreviewSection({super.key});
+
+  @override
+  State<ChartsPreviewSection> createState() => _ChartsPreviewSectionState();
+}
+
+class _ChartsPreviewSectionState extends State<ChartsPreviewSection> {
+  late Future<List<ChartURL>> _chartsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _chartsFuture = ChartsService().getChartsWithPreviews();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<ChartURL>>(
+      future: _chartsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return const SizedBox.shrink();
+        if (!snapshot.hasData) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: LoadingIndicatorM3E()),
+          );
+        }
+        final charts = snapshot.data!;
+        if (charts.isEmpty) return const SizedBox.shrink();
+        final items = charts.map((chart) {
+          return {
+            'title': chart.title,
+            'subtitle': 'Billboard Chart',
+            'thumbnails': [
+              {
+                'url': chart.coverArt ??
+                    'https://www.billboard.com/wp-content/themes/vip/pmc-billboard-2021/assets/app/icons/icon-512x512.png',
+                'width': 500,
+                'height': 500,
+              }
+            ],
+            'chartUrl': chart,
+            'aspectRatio': 1.0,
+          };
+        }).toList();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AdaptiveListTile(
+              contentPadding:
+                  const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+              title: Text('Browse Charts',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 20)),
+              leading: Icon(_sectionIcon('Browse Charts'),
+                  color: Colors.white54, size: 28),
+            ),
+            ItemList(items: items),
+          ],
+        );
+      },
+    );
   }
 }
 

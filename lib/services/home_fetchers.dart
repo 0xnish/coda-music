@@ -6,7 +6,6 @@ import 'package:Coda/ytmusic/mixins/browsing.dart'
     show handleChips, handleOuterContents, playlistIdTrimmer;
 import 'package:Coda/ytmusic/mixins/search.dart' show getSearchParams;
 import 'package:Coda/ytmusic/mixins/utils.dart';
-import 'package:Coda/services/charts_service.dart';
 
 const _ytmBase = 'https://music.youtube.com';
 const _ytmApiPath = '/youtubei/v1/';
@@ -437,21 +436,6 @@ Future<List<Map<String, dynamic>>> _fetchTrending(
   }
 }
 
-Future<List<Map<String, dynamic>>> _fetchChartsPreviews() async {
-  try {
-    final charts = await ChartsService().getChartsWithPreviews();
-    return charts
-        .map((chart) => {
-              'title': chart.title,
-              'url': chart.url,
-              'coverArt': chart.coverArt,
-            })
-        .toList();
-  } catch (_) {
-    return [];
-  }
-}
-
 Future<Map<String, dynamic>> fetchHomeData(
     Map<String, dynamic> params) async {
   final headers = Map<String, String>.from(params['headers'] as Map);
@@ -466,7 +450,6 @@ Future<Map<String, dynamic>> fetchHomeData(
     _fetchRecommendations(headers, ctx, visitorData, historySongs),
     _getMoodAndGenres(headers, ctx, visitorData: visitorData),
     _fetchTrending(headers, ctx, visitorData),
-    _fetchChartsPreviews(),
   ]);
 
   return {
@@ -474,6 +457,6 @@ Future<Map<String, dynamic>> fetchHomeData(
     'recommendations': results[1],
     'moodAndGenres': results[2],
     'trending': results[3],
-    'charts': results[4],
+    'charts': <Map<String, dynamic>>[],
   };
 }

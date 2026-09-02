@@ -131,13 +131,15 @@ Future<void> initialiseHive() async {
         "${(await getApplicationSupportDirectory()).path}/database";
   }
   await Hive.initFlutter(applicationDataDirectoryPath);
-  await Hive.openBox('SETTINGS');
-  await Hive.openBox('LIBRARY');
-  await Hive.openBox('SEARCH_HISTORY');
-  await Hive.openBox('SONG_HISTORY');
-  await Hive.openBox('FAVOURITES');
-  await Hive.openBox('DOWNLOADS');
-  await Hive.openBox('BLOCKED_SONGS');
+  await Future.wait([
+    Hive.openBox('SETTINGS'),
+    Hive.openBox('LIBRARY'),
+    Hive.openBox('SEARCH_HISTORY'),
+    Hive.openBox('SONG_HISTORY'),
+    Hive.openBox('FAVOURITES'),
+    Hive.openBox('DOWNLOADS'),
+    Hive.openBox('BLOCKED_SONGS'),
+  ]);
 }
 
 class SmoothScrollBehavior extends MaterialScrollBehavior {

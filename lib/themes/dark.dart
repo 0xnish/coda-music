@@ -2,12 +2,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 
-final _alanStyle = GoogleFonts.alanSans();
-final _tamilStyle = GoogleFonts.notoSansTamil();
-final defaultFontStyle = _alanStyle.copyWith(
-  fontFamilyFallback: [...?_alanStyle.fontFamilyFallback, _tamilStyle.fontFamily!],
+final defaultFontStyle = const TextStyle(
+  fontFamily: 'Alan Sans',
+  fontFamilyFallback: ['Noto Sans Tamil'],
 );
 ColorScheme darkScheme = const ColorScheme.dark();
 ThemeData darkTheme({required ColorScheme colorScheme}) {
