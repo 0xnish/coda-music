@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:scroll_animator/scroll_animator.dart';
+import 'package:Coda/core/widgets/chrome_dropdown.dart';
 import 'package:Coda/generated/l10n.dart';
 import 'package:Coda/screens/settings/widgets/setting_item.dart';
+import 'package:Coda/services/settings_manager.dart';
 import 'package:Coda/themes/text_styles.dart';
 import 'package:Coda/utils/bottom_modals.dart';
 
@@ -60,44 +62,40 @@ class _YTMusicPageState extends State<YTMusicPage> {
                       title: S.of(context).Country,
                       leading: const Icon(Icons.location_pin),
                       isFirst: true,
-                      trailing: DropdownButton<Map<String, String>>(
-                          value: state.location,
-                          items: cubit.locations
-                              .map(
-                                (l) => DropdownMenuItem(
-                                  value: l,
-                                  child: Text(
-                                    l['name']!.trim(),
-                                    style: smallTextStyle(context),
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (v) {
-                            if (v != null) {
-                              cubit.setLocation(v);
-                            }
-                          }),
+                      trailing: ChromeDropdown<Map<String, String>>(
+                        value: state.location,
+                        items: cubit.locations
+                            .map(
+                              (l) => ChromeDropdownItem(
+                                value: l,
+                                label: l['name']!.trim(),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) cubit.setLocation(v);
+                        },
+                        textStyle: smallTextStyle(context),
+                      ),
                     ),
 
                     SettingTile(
                       title: S.of(context).Language,
                       leading: const Icon(Icons.language),
-                      trailing: DropdownButton(
+                      trailing: ChromeDropdown<Map<String, String>>(
                         value: state.language,
                         items: cubit.languages
                             .map(
-                              (l) => DropdownMenuItem(
+                              (l) => ChromeDropdownItem(
                                 value: l,
-                                child: Text(
-                                  l['name']!.trim(),
-                                  style: smallTextStyle(context),
-                                ),
+                                label: l['name']!.trim(),
                               ),
                             )
                             .toList(),
-                        onChanged: (v) =>
-                            v != null ? cubit.setLanguage(v) : null,
+                        onChanged: (v) {
+                          if (v != null) cubit.setLanguage(v);
+                        },
+                        textStyle: smallTextStyle(context),
                       ),
                     ),
 
@@ -122,20 +120,20 @@ class _YTMusicPageState extends State<YTMusicPage> {
                       title: S.of(context).Streaming_Quality,
                       leading: const Icon(Icons.speaker_group_rounded),
                       isFirst: true,
-                      trailing: DropdownButton(
+                      trailing: ChromeDropdown<AudioQuality>(
                         value: state.streamingQuality,
                         items: cubit.audioQualities
                             .map(
-                              (e) => DropdownMenuItem(
+                              (e) => ChromeDropdownItem(
                                 value: e,
-                                child: Text(
-                                  e.name.toUpperCase(),
-                                  style: smallTextStyle(context),
-                                ),
+                                label: e.name.toUpperCase(),
                               ),
                             )
                             .toList(),
-                        onChanged: cubit.setStreamingQuality,
+                        onChanged: (v) {
+                          if (v != null) cubit.setStreamingQuality(v);
+                        },
+                        textStyle: smallTextStyle(context),
                       ),
                     ),
 
@@ -143,20 +141,20 @@ class _YTMusicPageState extends State<YTMusicPage> {
                       title: S.of(context).DOwnload_Quality,
                       leading: const Icon(Icons.cloud_download_rounded),
                       isLast: true,
-                      trailing: DropdownButton(
+                      trailing: ChromeDropdown<AudioQuality>(
                         value: state.downloadQuality,
                         items: cubit.audioQualities
                             .map(
-                              (e) => DropdownMenuItem(
+                              (e) => ChromeDropdownItem(
                                 value: e,
-                                child: Text(
-                                  e.name.toUpperCase(),
-                                  style: smallTextStyle(context),
-                                ),
+                                label: e.name.toUpperCase(),
                               ),
                             )
                             .toList(),
-                        onChanged: cubit.setDownloadQuality,
+                        onChanged: (v) {
+                          if (v != null) cubit.setDownloadQuality(v);
+                        },
+                        textStyle: smallTextStyle(context),
                       ),
                     ),
 

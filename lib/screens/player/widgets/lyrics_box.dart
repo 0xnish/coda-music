@@ -1,12 +1,12 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:get_it/get_it.dart';
+import 'package:Coda/core/widgets/chrome_dropdown.dart';
 import 'package:Coda/models/lyrics_model.dart';
 import 'package:Coda/services/lyrics.dart';
 import 'package:Coda/services/media_player.dart';
 import 'package:Coda/services/providers/google_translate_provider.dart';
-import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:just_audio/just_audio.dart' show ProcessingState;
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:loading_indicator_m3e/loading_indicator_m3e.dart';
@@ -176,7 +176,7 @@ class _LyricsBoxState extends State<LyricsBox> {
     if (parsed != null && parsed.lyrics.isNotEmpty) {
       // Translate from the app's parsed lines and rebuild the LRC so the
       // translated version has exactly the same lines/timestamps as the
-      // original — the highlight stays in sync for every language.
+      // original â€” the highlight stays in sync for every language.
       final texts = parsed.lyrics.map((l) => l.text).toList();
       final translatedTexts = await translator.translateLines(
         texts,
@@ -284,15 +284,34 @@ class _LyricsBoxState extends State<LyricsBox> {
                       return const Text('No Lyrics Found (Null)');
                     }
                     final lyrics = snapshot.data!;
+                    final hasLyrics =
+                        (lyrics.parsedLyrics?.lyrics.isNotEmpty ?? false) ||
+                            lyrics.lyricsPlain.isNotEmpty;
                     return Column(
                       children: [
-                        _TranslationControls(
-                          translating: _translating,
-                          targetLanguage: _targetLanguage,
-                          languages: _languages,
-                          onLanguageChanged: (lang) =>
-                              _onLanguageSelected(lang, lyrics),
-                        ),
+                        if (hasLyrics)
+                          ChromeDropdown<String>(
+                            value: _targetLanguage,
+                            items: [
+                              ChromeDropdownItem(
+                                value: _originalLanguage,
+                                label: _originalLanguage,
+                              ),
+                              ..._languages.map(
+                                (l) => ChromeDropdownItem(
+                                  value: l,
+                                  label: l,
+                                ),
+                              ),
+                            ],
+                            onChanged: (lang) {
+                              if (lang != null) _onLanguageSelected(lang, lyrics);
+                            },
+                            hint: 'Select language',
+                            loading: _translating,
+                            selectionIcon: Icons.music_note_outlined,
+                            enableSearch: true,
+                          ),
                         Expanded(
                           child: LoadedLyricsWidget(
                             lyrics: _translated ? (_translatedLyrics ?? lyrics) : lyrics,
@@ -313,262 +332,6 @@ class _LyricsBoxState extends State<LyricsBox> {
   }
 }
 
-class _TranslationControls extends StatefulWidget {
-  const _TranslationControls({
-    required this.translating,
-    required this.targetLanguage,
-    required this.languages,
-    required this.onLanguageChanged,
-  });
-
-  final bool translating;
-  final String targetLanguage;
-  final List<String> languages;
-  final ValueChanged<String> onLanguageChanged;
-
-  @override
-  State<_TranslationControls> createState() => _TranslationControlsState();
-}
-
-class _TranslationControlsState extends State<_TranslationControls> {
-  final TextEditingController _searchController = TextEditingController();
-  late final ValueNotifier<String?> _value =
-      ValueNotifier<String?>(widget.targetLanguage);
-
-  @override
-  void didUpdateWidget(covariant _TranslationControls oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.targetLanguage != widget.targetLanguage) {
-      _value.value = widget.targetLanguage;
-    }
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    _value.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final allLanguages = [
-      _LyricsBoxState._originalLanguage,
-      ...widget.languages,
-    ];
-
-    return Center(
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton2<String>(
-          valueListenable: _value,
-          hint: Text(
-            'Select language',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.white.withValues(alpha: 0.6),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          items: allLanguages
-              .map(
-                (language) => DropdownItem<String>(
-                  value: language,
-                  height: 34,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.max,
-                    children: [
-                      // Fixed-width leading slot keeps every item's text
-                      // left-aligned; the music icon marks the selected
-                      // language only.
-                      SizedBox(
-                        width: 18,
-                        height: 16,
-                        child: language == widget.targetLanguage
-                            ? const Icon(
-                                Icons.music_note_outlined,
-                                size: 16,
-                                color: Colors.white,
-                              )
-                            : null,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          language,
-                          maxLines: 1,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: widget.targetLanguage == language
-                                ? Colors.white
-                                : Colors.white70,
-                            fontWeight: widget.targetLanguage == language
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-              .toList(),
-          // Builds the button content: the selected language only. While
-          // translating, the dropdown arrow is swapped for a small loading
-          // indicator (see iconStyleData). No Flexible here: the button can
-          // be measured under unbounded width, which a flex child rejects.
-          selectedItemBuilder: (context) {
-            return allLanguages.map(
-              (language) {
-                return Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Fixed-width leading slot matching the menu items.
-                    const SizedBox(
-                      width: 18,
-                      height: 16,
-                      child: Icon(
-                        Icons.music_note_outlined,
-                        size: 16,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // 200 (button) - 28 (padding) - 18 (icon) - 8 (gap) - 22
-                    // (arrow) keeps the text clipped instead of overflowing.
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 124),
-                      child: Text(
-                        language,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
-          onChanged: (value) {
-            if (value != null) widget.onLanguageChanged(value);
-          },
-          buttonStyleData: ButtonStyleData(
-            height: 40,
-            width: 200,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.18),
-              ),
-              color: Colors.white.withValues(alpha: 0.08),
-            ),
-            elevation: 0,
-          ),
-          iconStyleData: IconStyleData(
-            // Swap the arrow for a small loading indicator while translating.
-            // LoadingIndicatorM3E renders at ~38px minimum, so scale it down.
-            icon: widget.translating
-                ? SizedBox(
-                    width: 26,
-                    height: 26,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: LoadingIndicatorM3E(color: Colors.white),
-                    ),
-                  )
-                : const Icon(Icons.keyboard_arrow_down_rounded),
-            iconSize: 22,
-            iconEnabledColor:
-                Colors.white.withValues(alpha: widget.translating ? 0.8 : 0.85),
-            iconDisabledColor: Colors.white.withValues(alpha: 0.3),
-          ),
-          dropdownStyleData: DropdownStyleData(
-            maxHeight: 260,
-            width: 200,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              color: Colors.grey.shade900,
-            ),
-            elevation: 6,
-            // On desktop dropdown_button2 hardcodes thumbVisibility to true (theme is
-            // only used on iOS), so zero out the thumb thickness to hide it.
-            scrollbarTheme: const ScrollbarThemeData(
-              thumbVisibility: WidgetStatePropertyAll(false),
-              trackVisibility: WidgetStatePropertyAll(false),
-              thickness: WidgetStatePropertyAll(0),
-            ),
-          ),
-          menuItemStyleData: const MenuItemStyleData(
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-            overlayColor: WidgetStatePropertyAll(
-              Colors.white12,
-            ),
-          ),
-          dropdownSearchData: DropdownSearchData(
-            searchController: _searchController,
-            searchBarWidgetHeight: 46,
-            searchBarWidget: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-              child: TextField(
-                controller: _searchController,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-                decoration: InputDecoration(
-                  hintText: 'Search',
-                  hintStyle: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.4),
-                  ),
-                  prefixIcon: Icon(
-                    Icons.search,
-                    color: Colors.white.withValues(alpha: 0.5),
-                    size: 18,
-                  ),
-                  isDense: true,
-                  filled: true,
-                  fillColor: Colors.white.withValues(alpha: 0.06),
-                  contentPadding:
-                      const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide:
-                        BorderSide(color: Colors.white.withValues(alpha: 0.15)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide:
-                        BorderSide(color: Colors.white.withValues(alpha: 0.35)),
-                  ),
-                ),
-              ),
-            ),
-            searchMatchFn: (item, searchValue) => item.value
-                .toString()
-                .toLowerCase()
-                .contains(searchValue.toLowerCase()),
-            noResultsWidget: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                'No language found',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.5),
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          ),
-          onMenuStateChange: (isOpen) {
-            if (!isOpen) _searchController.clear();
-          },
-        ),
-      ),
-    );
-  }
-}
 
 class LoadedLyricsWidget extends StatelessWidget {
   final Lyrics lyrics;
