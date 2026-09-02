@@ -95,20 +95,15 @@ class SearchCubit extends Cubit<SearchState> {
       selectedType: SearchType.all,
     ));
     try {
-      final results = await Future.wait([
-        _ytmusic.search(query, filter: 'songs'),
-        _ytmusic.search(query, filter: 'albums'),
-        _ytmusic.search(query, filter: 'artists'),
-        _ytmusic.search(query, filter: 'playlists'),
-        _ytmusic.search(query, filter: 'videos'),
-      ]);
+      final result = await _ytmusic.search(query);
       emit(state.copyWith(
         uiState: SearchUIState.results,
-        songs: _extractContents(results[0]),
-        albums: _extractContents(results[1]),
-        artists: _extractContents(results[2]),
-        playlists: _extractContents(results[3]),
-        videos: _extractContents(results[4]),
+        summarySections: _extractSections(result),
+        songs: const [],
+        albums: const [],
+        artists: const [],
+        playlists: const [],
+        videos: const [],
         isLoading: false,
         clearError: true,
       ));
@@ -175,6 +170,83 @@ class SearchCubit extends Cubit<SearchState> {
         .expand((s) => (s['contents'] as List? ?? [])
             .map((e) => Map<String, dynamic>.from(e as Map)))
         .toList();
+  }
+
+  List<Map<String, dynamic>> _extractSections(Map<String, dynamic> result) {
+    final raw = result['sections'] as List? ?? [];
+    final titledSections = <Map<String, dynamic>>[];
+    final flatItems = <Map<String, dynamic>>[];
+
+    for (final s in raw) {
+      final map = Map<String, dynamic>.from(s as Map);
+      final title = map['title'] as String?;
+      final contents = (map['contents'] as List? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      final t = title?.trim();
+      if (t != null && t.isNotEmpty) {
+        titledSections.add({'title': t, 'contents': contents});
+      } else {
+        flatItems.addAll(contents);
+      }
+    }
+
+    final sections = <Map<String, dynamic>>[...titledSections, ..._groupItemsByType(flatItems)];
+
+    final merged = <String, List<Map<String, dynamic>>>{};
+    for (final sec in sections) {
+      final title = sec['title'] as String;
+      final contents = (sec['contents'] as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      merged.putIfAbsent(title, () => []).addAll(contents);
+    }
+
+    final resultSections = <Map<String, dynamic>>[
+      for (final e in merged.entries)
+        {'title': e.key, 'contents': e.value},
+    ]..sort((a, b) => _sectionOrder(a['title'] as String)
+        .compareTo(_sectionOrder(b['title'] as String)));
+    return resultSections;
+  }
+
+  List<Map<String, dynamic>> _groupItemsByType(List<Map<String, dynamic>> items) {
+    final grouped = <String, List<Map<String, dynamic>>>{};
+    for (final item in items) {
+      final key = _sectionNameFor(item['type']);
+      grouped.putIfAbsent(key, () => []).add(item);
+    }
+    final order = [
+      'Songs', 'Videos', 'Albums', 'Artists', 'Playlists',
+      'Podcasts', 'Episodes', 'Profiles', 'Other results',
+    ];
+    return order
+        .where(grouped.containsKey)
+        .map((name) => {'title': name, 'contents': grouped[name]!})
+        .toList();
+  }
+
+  int _sectionOrder(String title) {
+    const order = [
+      'Top result', 'Songs', 'Videos', 'Albums', 'Artists', 'Playlists',
+      'Podcasts', 'Episodes', 'Profiles', 'Other results',
+    ];
+    final index = order.indexOf(title);
+    return index == -1 ? order.length : index;
+  }
+
+  String _sectionNameFor(dynamic type) {
+    switch (type) {
+      case 'SONG': return 'Songs';
+      case 'VIDEO': return 'Videos';
+      case 'ALBUM': return 'Albums';
+      case 'ARTIST': return 'Artists';
+      case 'PROFILE': return 'Profiles';
+      case 'PLAYLIST': return 'Playlists';
+      case 'PODCAST': return 'Podcasts';
+      case 'EPISODE': return 'Episodes';
+      default: return 'Other results';
+    }
   }
 
   String? _typeToFilter(SearchType type) {

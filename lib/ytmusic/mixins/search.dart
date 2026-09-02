@@ -146,11 +146,14 @@ mixin SearchMixin on YTClient {
       for (Map content in contents) {
         Map? musicCardShelfRenderer = content['musicCardShelfRenderer'];
         Map? musicShelfRenderer = content['musicShelfRenderer'];
+        Map? itemSectionRenderer = content['itemSectionRenderer'];
         if (musicCardShelfRenderer != null) {
           resultContents
               .add(_handleMusicCardShelfRenderer(musicCardShelfRenderer));
         } else if (musicShelfRenderer != null) {
           resultContents.add(handleMusicShelfRenderer(musicShelfRenderer));
+        } else if (itemSectionRenderer != null) {
+          resultContents.add(_handleItemSectionRenderer(itemSectionRenderer));
         }
       }
       if (continuationContents != null) {
@@ -174,8 +177,15 @@ mixin SearchMixin on YTClient {
     return section;
   }
 
+  Map<String, dynamic> _handleItemSectionRenderer(Map item) {
+    Map<String, dynamic> section = {};
+    List? contents = nav(item, ['contents']);
+    section['contents'] = contents != null ? handleContents(contents) : [];
+    return section;
+  }
 
-  _handleTopResult(Map item) {
+
+Map<String, dynamic> _handleTopResult(Map item) {
     Map? browseEndpoint =
         nav(item, ['title', 'runs', 0, 'navigationEndpoint', 'browseEndpoint']);
     Map? watchEndpoint =

@@ -666,11 +666,9 @@ class _ResultsListState extends State<_ResultsList> {
     final widgets = <Widget>[];
     switch (widget.state.selectedType) {
       case SearchType.all:
-        _addSection(widgets, 'Artists', widget.state.artists, (item) => _ArtistResultTile(item: item, onTap: () => widget.onArtistTap(item)));
-        _addSection(widgets, 'Songs', widget.state.songs, (item) => _SongResultTile(item: item, onTap: () => widget.onSongTap(item)));
-        _addSection(widgets, 'Videos', widget.state.videos, (item) => _SongResultTile(item: item, onTap: () => widget.onSongTap(item)));
-        _addSection(widgets, 'Albums', widget.state.albums, (item) => _AlbumResultTile(item: item, onTap: () => widget.onAlbumTap(item)));
-        _addSection(widgets, 'Playlists', widget.state.playlists, (item) => _PlaylistResultTile(item: item, onTap: () => widget.onPlaylistTap(item)));
+        for (final section in widget.state.summarySections) {
+          _addSummarySection(widgets, section);
+        }
         break;
       case SearchType.songs:
         widgets.addAll(widget.state.songs.map((item) => _SongResultTile(item: item, onTap: () => widget.onSongTap(item))));
@@ -691,13 +689,43 @@ class _ResultsListState extends State<_ResultsList> {
     return widgets;
   }
 
-  void _addSection(List<Widget> widgets, String title, List<Map<String, dynamic>> items, Widget Function(Map<String, dynamic>) tileBuilder) {
-    if (items.isEmpty) return;
+  void _addSummarySection(List<Widget> widgets, Map<String, dynamic> section) {
+    final contents = (section['contents'] as List? ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    if (contents.isEmpty) return;
     widgets.add(Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-      child: Text(title, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 15, fontWeight: FontWeight.w600)),
+      child: Text(
+        (section['title'] as String?) ?? '',
+        style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.7),
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     ));
-    widgets.addAll(items.map(tileBuilder));
+    for (final item in contents) {
+      widgets.add(_tileForItem(item));
+    }
+  }
+
+  Widget _tileForItem(Map<String, dynamic> item) {
+    if (item['type'] == null && item['endpoint'] == null) {
+      return _SongResultTile(item: item, onTap: () => widget.onSongTap(item));
+    }
+    switch (item['type']) {
+      case 'ALBUM':
+        return _AlbumResultTile(item: item, onTap: () => widget.onAlbumTap(item));
+      case 'ARTIST':
+        return _ArtistResultTile(item: item, onTap: () => widget.onArtistTap(item));
+      case 'PLAYLIST':
+        return _PlaylistResultTile(item: item, onTap: () => widget.onPlaylistTap(item));
+      case 'VIDEO':
+        return _SongResultTile(item: item, onTap: () => widget.onSongTap(item));
+      default:
+        return _SongResultTile(item: item, onTap: () => widget.onSongTap(item));
+    }
   }
 }
 

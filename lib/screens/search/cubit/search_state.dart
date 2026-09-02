@@ -16,6 +16,7 @@ class SearchState {
   final List<Map<String, dynamic>> artists;
   final List<Map<String, dynamic>> playlists;
   final List<Map<String, dynamic>> videos;
+  final List<Map<String, dynamic>> summarySections;
   final bool isLoading;
   final bool isLoadingSuggestions;
   final String? error;
@@ -32,6 +33,7 @@ class SearchState {
     this.artists = const [],
     this.playlists = const [],
     this.videos = const [],
+    this.summarySections = const [],
     this.isLoading = false,
     this.isLoadingSuggestions = false,
     this.error,
@@ -42,7 +44,8 @@ class SearchState {
       albums.isNotEmpty ||
       artists.isNotEmpty ||
       playlists.isNotEmpty ||
-      videos.isNotEmpty;
+      videos.isNotEmpty ||
+      summarySections.isNotEmpty;
 
   SearchState copyWith({
     SearchUIState? uiState,
@@ -56,6 +59,7 @@ class SearchState {
     List<Map<String, dynamic>>? artists,
     List<Map<String, dynamic>>? playlists,
     List<Map<String, dynamic>>? videos,
+    List<Map<String, dynamic>>? summarySections,
     bool? isLoading,
     bool? isLoadingSuggestions,
     String? error,
@@ -73,6 +77,7 @@ class SearchState {
       artists: artists ?? this.artists,
       playlists: playlists ?? this.playlists,
       videos: videos ?? this.videos,
+      summarySections: summarySections ?? this.summarySections,
       isLoading: isLoading ?? this.isLoading,
       isLoadingSuggestions: isLoadingSuggestions ?? this.isLoadingSuggestions,
       error: clearError ? null : (error ?? this.error),
