@@ -58,7 +58,7 @@ class _LyricsBoxState extends State<LyricsBox> {
     'Japanese',
     'Korean',
     'Arabic',
-    'Chinese (Simplified)',
+    'Chinese',
     'Urdu',
     'Marathi',
     'Gujarati',
@@ -295,6 +295,7 @@ class _LyricsBoxState extends State<LyricsBox> {
                             loading: _translating,
                             selectionIcon: Icons.music_note_outlined,
                             enableSearch: true,
+                            width: 170,
                           ),
                         Expanded(
                           child: LoadedLyricsWidget(

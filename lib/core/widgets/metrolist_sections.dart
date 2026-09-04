@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
@@ -9,84 +8,78 @@ import '../../utils/adaptive_widgets/adaptive_widgets.dart';
 import '../../utils/enhanced_image.dart';
 import '../../utils/bottom_modals.dart';
 
-class SpeedDialGrid extends StatefulWidget {
+class TrendingSection extends StatefulWidget {
   final List items;
-  const SpeedDialGrid({required this.items, super.key});
+  const TrendingSection({required this.items, super.key});
 
   @override
-  State<SpeedDialGrid> createState() => _SpeedDialGridState();
+  State<TrendingSection> createState() => _TrendingSectionState();
 }
 
-class _SpeedDialGridState extends State<SpeedDialGrid> {
-  late final AnimatedScrollController _scrollController;
-
-  @override
-  void initState() {
-    super.initState();
-    _scrollController = AnimatedScrollController(
-      animationFactory: const ChromiumEaseInOut(),
-    );
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
+class _TrendingSectionState extends State<TrendingSection> {
   @override
   Widget build(BuildContext context) {
     if (widget.items.isEmpty) return const SizedBox();
-    final itemWidth = 120.0;
-    final itemHeight = 140.0;
+    final cardHeight = 150.0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(
             children: [
-              const Icon(Icons.flash_on, size: 20, color: Colors.white70),
+              const Icon(Icons.trending_up, size: 20, color: Colors.white70),
               const SizedBox(width: 8),
-              Text('Quick Access',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              const Text('Trending',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
               const Spacer(),
               AdaptiveOutlinedButton(
                 onPressed: () {
                   if (widget.items.isNotEmpty) {
-                    final random = widget.items[Random().nextInt(widget.items.length)];
-                    GetIt.I<MediaPlayer>().playSong(Map.from(random));
+                    GetIt.I<MediaPlayer>()
+                        .playSong(Map.from(widget.items[0]));
                   }
                 },
-                child: const Icon(Icons.shuffle, size: 18),
+                child: const Icon(Icons.play_arrow, size: 18),
               ),
             ],
           ),
         ),
         SizedBox(
-          height: itemHeight + 16,
+          height: cardHeight + 56,
           child: ListView.separated(
-            controller: _scrollController,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
             scrollDirection: Axis.horizontal,
             itemCount: widget.items.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            separatorBuilder: (_, __) => const SizedBox(width: 0.5),
             itemBuilder: (context, index) {
               final item = widget.items[index];
+              final width = cardHeight * (item['aspectRatio'] ?? 1);
               final thumbnails = item['thumbnails'] as List? ?? [];
               final thumbUrl = thumbnails.isNotEmpty
-                  ? getEnhancedImage(thumbnails.first['url'], dp: MediaQuery.of(context).devicePixelRatio, width: itemWidth)
+                  ? getEnhancedImage(thumbnails.first['url'],
+                      dp: MediaQuery.of(context).devicePixelRatio, width: width)
                   : '';
-              return SizedBox(
-                width: itemWidth,
+              final subtitle = item['subtitle'] ?? '';
+              return Adaptivecard(
+                elevation: 0,
+                borderRadius: BorderRadius.circular(8),
+                padding: EdgeInsets.zero,
                 child: AdaptiveInkWell(
-                  borderRadius: BorderRadius.circular(10),
+                  padding: const EdgeInsets.all(4),
                   onTap: () async {
                     if (item['endpoint'] != null && item['videoId'] == null) {
-                      context.push('/browse', extra: {'endpoint': item['endpoint']});
+                      context.push('/browse',
+                          extra: {'endpoint': item['endpoint']});
                     } else {
-                      await GetIt.I<MediaPlayer>().playSong(Map.from(item));
+                      await GetIt.I<MediaPlayer>()
+                          .playSong(Map.from(item));
+                    }
+                  },
+                  onSecondaryTap: () {
+                    if (item['videoId'] != null) {
+                      Modals.showSongBottomModal(context, item);
                     }
                   },
                   onLongPress: () {
@@ -94,29 +87,55 @@ class _SpeedDialGridState extends State<SpeedDialGrid> {
                       Modals.showSongBottomModal(context, item);
                     }
                   },
+                  borderRadius: BorderRadius.circular(8),
                   child: Column(
                     children: [
-                      Container(
-                        width: itemWidth,
-                        height: itemWidth,
+                      Ink(
+                        width: width,
+                        height: cardHeight,
                         decoration: BoxDecoration(
-                          color: Colors.grey.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(10),
+                          color: Colors.grey.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
                           image: thumbUrl.isNotEmpty
-                              ? DecorationImage(image: CachedNetworkImageProvider(thumbUrl), fit: BoxFit.cover)
+                              ? DecorationImage(
+                                  fit: BoxFit.cover,
+                                  image: CachedNetworkImageProvider(thumbUrl),
+                                )
                               : null,
                         ),
                         child: thumbUrl.isEmpty
-                            ? const Center(child: Icon(Icons.music_note, size: 32, color: Colors.white38))
+                            ? const Center(
+                                child: Icon(Icons.music_note,
+                                    size: 28, color: Colors.white38))
                             : null,
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        item['title'] ?? '',
-                        maxLines: 2,
-                        textAlign: TextAlign.center,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 11, height: 1.2),
+                      Expanded(
+                        child: SizedBox(
+                          width: width,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                item['title']?.toString() ?? '',
+                                maxLines: 2,
+                                textAlign: TextAlign.left,
+                                style: const TextStyle(fontSize: 11, height: 1.2),
+                                overflow: TextOverflow.ellipsis,
+                                softWrap: true,
+                              ),
+                              if (subtitle != null && subtitle.toString().isNotEmpty)
+                                Text(
+                                  subtitle.toString(),
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.grey.withOpacity(0.9)),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),

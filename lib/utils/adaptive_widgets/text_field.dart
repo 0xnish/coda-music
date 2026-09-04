@@ -18,6 +18,7 @@ class AdaptiveTextField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final BorderRadius borderRadius;
   final double borderWidth;
+  final Color? borderColor;
   const AdaptiveTextField({
     super.key,
     this.controller,
@@ -37,6 +38,7 @@ class AdaptiveTextField extends StatelessWidget {
     this.maxLines = 1,
     this.borderRadius = const BorderRadius.all(Radius.circular(4.0)),
     this.borderWidth = 0,
+    this.borderColor,
   });
 
   @override
@@ -62,7 +64,7 @@ class AdaptiveTextField extends StatelessWidget {
         suffixIcon: suffix,
         border: OutlineInputBorder(
           borderSide: borderWidth > 0
-              ? BorderSide(width: borderWidth)
+              ? BorderSide(width: borderWidth, color: borderColor ?? Colors.grey)
               : BorderSide.none,
           borderRadius: borderRadius,
         ),

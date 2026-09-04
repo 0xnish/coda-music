@@ -110,13 +110,8 @@ class _SectionItemState extends State<SectionItem> {
   @override
   Widget build(BuildContext context) {
     final customType = widget.section['customType'];
-    if (customType == 'speed_dial') {
-      return Column(
-        children: [
-          SpeedDialGrid(items: widget.section['contents'] ?? []),
-          const SizedBox(height: 12),
-        ],
-      );
+    if (customType == 'trending') {
+      return TrendingSection(items: widget.section['contents'] ?? []);
     }
     if (customType == 'daily_discover') {
       return Column(
@@ -282,7 +277,15 @@ class _ChartsPreviewSectionState extends State<ChartsPreviewSection> {
   @override
   void initState() {
     super.initState();
-    _chartsFuture = ChartsService().getChartsWithPreviews();
+    _chartsFuture = fetchChartsForPreview().then((data) {
+      return data.map((e) {
+        return ChartURL(
+          title: e['title'] ?? '',
+          url: e['url'] ?? '',
+          coverArt: e['coverArt'],
+        );
+      }).toList();
+    });
   }
 
   @override
@@ -291,12 +294,7 @@ class _ChartsPreviewSectionState extends State<ChartsPreviewSection> {
       future: _chartsFuture,
       builder: (context, snapshot) {
         if (snapshot.hasError) return const SizedBox.shrink();
-        if (!snapshot.hasData) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: LoadingIndicatorM3E()),
-          );
-        }
+        if (!snapshot.hasData) return const SizedBox.shrink();
         final charts = snapshot.data!;
         if (charts.isEmpty) return const SizedBox.shrink();
         final items = charts.map((chart) {

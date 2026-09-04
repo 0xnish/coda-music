@@ -23,7 +23,7 @@ class GoogleTranslateTranslator {
     'Catalan': 'ca',
     'Cebuano': 'ceb',
     'Chichewa': 'ny',
-    'Chinese (Simplified)': 'zh-CN',
+    'Chinese': 'zh-CN',
     'Chinese (Traditional)': 'zh-TW',
     'Corsican': 'co',
     'Croatian': 'hr',

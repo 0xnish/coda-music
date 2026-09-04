@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:isolate';
 
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' show parse;
@@ -83,7 +84,7 @@ class ChartsService {
       var response = await client.get(Uri.parse(url.url), headers: {
         'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
-      });
+      }).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         var document = parse(response.body);
@@ -127,7 +128,9 @@ class ChartsService {
 
   Future<ChartModel> getSpotifyTop50Chart(ChartURL url) async {
     try {
-      final response = await http.get(Uri.parse(url.url));
+      final response = await http
+          .get(Uri.parse(url.url))
+          .timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         List<ChartItemModel> chartItems = [];
@@ -152,3 +155,39 @@ class ChartsService {
     }
   }
 }
+
+/// Runs chart preview fetching in a background isolate so the UI thread is not
+/// blocked by network I/O and HTML parsing. Returns plain sendable data.
+Future<List<Map<String, String?>>> fetchChartsForPreview() {
+  return Isolate.run(_fetchChartsWorker);
+}
+
+Future<List<Map<String, String?>>> _fetchChartsWorker() async {
+  final service = ChartsService();
+  final result = <Map<String, String?>>[];
+  for (final entry in service.getAllBillboardCharts()) {
+    try {
+      final chart = ChartURL(title: entry.title, url: entry.url);
+      final model = entry.url.contains('spotify.com')
+          ? await service
+              .getSpotifyTop50Chart(chart)
+              .timeout(const Duration(seconds: 10))
+          : await service
+              .getBillboardChart(chart)
+              .timeout(const Duration(seconds: 10));
+      String? coverArt;
+      if (model.chartItems != null && model.chartItems!.isNotEmpty) {
+        coverArt = model.chartItems!.first.imageUrl;
+      }
+      result.add({
+        'title': entry.title,
+        'url': entry.url,
+        'coverArt': coverArt,
+      });
+    } catch (_) {
+      // skip charts that fail to load
+    }
+  }
+  return result;
+}
+

@@ -39,8 +39,9 @@ class HomeCubit extends Cubit<HomeState> {
 
     List<Map<String, dynamic>> sections = [];
 
-    final speedDial = _createSpeedDialSection(recommendations);
-    if (speedDial != null) sections.add(speedDial);
+    if (trending.isNotEmpty) {
+      sections.add(_createTrendingSection(trending));
+    }
 
     final quickPicksIdx = ytSections.indexWhere(
       (s) => s['title'] is String &&
@@ -57,9 +58,6 @@ class HomeCubit extends Cubit<HomeState> {
         _createMoodAndGenresSection(moodAndGenresResult);
     if (moodAndGenres != null) sections.add(moodAndGenres);
 
-    if (trending.isNotEmpty) {
-      sections.add(_createTrendingSection(trending));
-    }
     sections.add(_createChartsPreviewSection());
     sections.addAll(ytSections);
 
@@ -81,43 +79,13 @@ class HomeCubit extends Cubit<HomeState> {
     }
   }
 
-  Map<String, dynamic>? _createSpeedDialSection(
-      List<Map<String, dynamic>> recommendations) {
-    try {
-      if (recommendations.isNotEmpty) {
-        final items = recommendations.take(24).toList();
-        return {
-          'customType': 'speed_dial',
-          'title': 'Quick Access',
-          'contents': items,
-        };
-      }
-      final box = Hive.box('SONG_HISTORY');
-      final allSongs = box.values
-          .where((s) => s is Map && s['videoId'] != null)
-          .map((s) => Map<String, dynamic>.from(s as Map))
-          .toList();
-      if (allSongs.isEmpty) return null;
-      allSongs.sort((a, b) =>
-          ((b['updatedAt'] ?? 0)).compareTo((a['updatedAt'] ?? 0)));
-      final items = allSongs.take(24).toList();
-      return {
-        'customType': 'speed_dial',
-        'title': 'Quick Access',
-        'contents': items,
-      };
-    } catch (_) {
-      return null;
-    }
-  }
-
   Map<String, dynamic>? _createDailyDiscoverSection(
       List<Map<String, dynamic>> recommendations) {
     if (recommendations.isEmpty) return null;
     return {
       'customType': 'daily_discover',
       'title': 'Daily Discover',
-      'contents': recommendations.take(10).toList(),
+      'contents': recommendations.take(30).toList(),
     };
   }
 
@@ -144,7 +112,8 @@ class HomeCubit extends Cubit<HomeState> {
 
   Map<String, dynamic> _createTrendingSection(List songs) {
     return {
-      'title': 'Trending in India',
+      'customType': 'trending',
+      'title': 'Trending',
       'contents': songs,
     };
   }

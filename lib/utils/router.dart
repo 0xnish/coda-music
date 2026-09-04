@@ -237,7 +237,13 @@ class MyPageViewState extends State<MyPageView> {
               : Axis.horizontal,
       physics: const NeverScrollableScrollPhysics(),
       controller: controller,
-      children: widget.children,
+      children: [
+        for (var i = 0; i < widget.children.length; i++)
+          RepaintBoundary(
+            key: ValueKey(i),
+            child: widget.children[i],
+          ),
+      ],
     );
   }
 }

@@ -625,6 +625,65 @@ class MediaPlayer extends ChangeNotifier {
     }
   }
 
+  Future<void> playStreamUrl(
+    String url, {
+    String title = 'Live Radio',
+    String? subtitle,
+    String? artUrl,
+  }) async {
+    _cancelLoadingTimeout();
+    _retryPending = false;
+    _loadingRetryCount = 0;
+    _lastFailedVideoId = null;
+    _handlingCompletion = false;
+    _switching = true;
+    _progressBarLocked = true;
+    _bufferingResume = null;
+    _bufferingResumeId = null;
+    _resetProgressBar();
+
+    try {
+      final extras = <String, dynamic>{
+        'title': title,
+        'subtitle': subtitle,
+        'isRadio': true,
+        if (artUrl != null && artUrl.isNotEmpty)
+          'thumbnails': [
+            {'url': artUrl, 'width': 300, 'height': 300}
+          ],
+      };
+      final MediaItem tag = MediaItem(
+        id: url,
+        title: title,
+        artist: subtitle,
+        artUri: artUrl != null && artUrl.isNotEmpty ? Uri.parse(artUrl) : null,
+        extras: extras,
+      );
+      final source = AudioSource.uri(Uri.parse(url), tag: tag);
+
+      _setQueue([source], 0);
+      _buttonState.value = ButtonState.loading;
+      notifyListeners();
+
+      await _player.pause();
+      await _player.stop();
+      await _player.clearAudioSources();
+      await _player.setAudioSource(source);
+      await _player.play();
+
+      _switching = false;
+      _progressBarLocked = false;
+      _buttonState.value = ButtonState.playing;
+      notifyListeners();
+      _syncIndex(0);
+    } catch (e) {
+      _switching = false;
+      _progressBarLocked = false;
+      _buttonState.value = ButtonState.paused;
+      notifyListeners();
+    }
+  }
+
   Future<void> playNext(Map<String, dynamic> mediaItem) async {
     final songMaps = await _resolveSongMaps(mediaItem);
     if (songMaps.isEmpty) return;

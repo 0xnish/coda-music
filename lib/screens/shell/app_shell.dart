@@ -133,8 +133,8 @@ class _AppShellState extends State<AppShell> {
               children: [
                 const Spacer(),
                 _SidebarBtn(
-                  icon: Icons.home_rounded,
-                  label: S.of(context).Home,
+                  icon: Icons.music_note_rounded,
+                  label: 'Music',
                   selected: _selectedIndex == 0 && !isSearch,
                   onTap: () => _onNavTap(0),
                 ),
@@ -325,23 +325,12 @@ class _MacOSTrafficLights extends StatefulWidget {
 class _MacOSTrafficLightsState extends State<_MacOSTrafficLights> {
   bool _closeHovered = false;
   bool _minHovered = false;
-  bool _maxHovered = false;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _TrafficDot(
-          baseColor: const Color(0xFFFF5F57),
-          hoverColor: const Color(0xFFE0443E),
-          icon: Icons.close,
-          hovered: _closeHovered,
-          onEnter: () => setState(() => _closeHovered = true),
-          onExit: () => setState(() => _closeHovered = false),
-          onTap: () => WindowService.close(),
-        ),
-        const SizedBox(width: 10),
         _TrafficDot(
           baseColor: const Color(0xFFFFBD2E),
           hoverColor: const Color(0xFFE0A325),
@@ -353,13 +342,13 @@ class _MacOSTrafficLightsState extends State<_MacOSTrafficLights> {
         ),
         const SizedBox(width: 10),
         _TrafficDot(
-          baseColor: const Color(0xFF28C840),
-          hoverColor: const Color(0xFF1D9B30),
-          icon: Icons.fullscreen,
-          hovered: _maxHovered,
-          onEnter: () => setState(() => _maxHovered = true),
-          onExit: () => setState(() => _maxHovered = false),
-          onTap: () => WindowService.maximize(),
+          baseColor: const Color(0xFFFF5F57),
+          hoverColor: const Color(0xFFE0443E),
+          icon: Icons.close,
+          hovered: _closeHovered,
+          onEnter: () => setState(() => _closeHovered = true),
+          onExit: () => setState(() => _closeHovered = false),
+          onTap: () => WindowService.close(),
         ),
       ],
     );
