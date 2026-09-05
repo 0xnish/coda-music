@@ -15,7 +15,7 @@ class UpdateCheckingDialog extends StatelessWidget {
           children: [
             LoadingIndicatorM3E(),
             SizedBox(width: 16),
-            Text('Checking for updates…'),
+            Text('Checking for updates'),
           ],
         ),
       ),

@@ -96,28 +96,9 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         SettingTile(
                           title: "Check for Updates",
-                          leading: settings.hasUpdate
-                              ? Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    const Icon(Icons.system_update),
-                                    Positioned(
-                                      top: -2,
-                                      right: -2,
-                                      child: Container(
-                                        width: 8,
-                                        height: 8,
-                                        decoration: const BoxDecoration(
-                                          color: Colors.redAccent,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : const Icon(Icons.system_update),
+                          leading: const Icon(Icons.system_update),
                           isLast: true,
-                          onTap: () => UpdateService.manualCheck(context),
+                          onTap: () => UpdateService.checkFromSettings(context),
                         ),
                         const SizedBox(height: 100),
                       ],

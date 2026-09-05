@@ -1,7 +1,7 @@
 [Setup]
 AppName=Coda Music
-AppVersion=3.3.0
-AppVerName=Coda Music 3.3.0
+AppVersion=3.3.1
+AppVerName=Coda Music 3.3.1
 AppPublisher=0xnish
 AppPublisherURL=https://github.com/0xnish/coda-music
 DefaultDirName={autopf}\Coda Music
@@ -11,13 +11,13 @@ UninstallDisplayName=Coda Music
 Compression=lzma2
 SolidCompression=yes
 OutputDir=..\installers
-OutputBaseFilename=coda-music-Setup-3.3.0
+OutputBaseFilename=coda-music-Setup-3.3.1
 SetupIconFile=runner\resources\app_icon.ico
-VersionInfoVersion=3.3.0.0
+VersionInfoVersion=3.3.1.0
 VersionInfoCompany=0xnish
 VersionInfoDescription=Coda Music Installer
 VersionInfoProductName=Coda Music
-VersionInfoProductVersion=3.3.0
+VersionInfoProductVersion=3.3.1
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 

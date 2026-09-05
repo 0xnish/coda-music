@@ -117,9 +117,11 @@ class _AppShellState extends State<AppShell> {
     final isSearch = currentPath == '/search';
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Row(
+      body: Stack(
         children: [
-          Container(
+          Row(
+            children: [
+              Container(
             width: 60,
             decoration: BoxDecoration(
               border: Border(
@@ -158,7 +160,6 @@ class _AppShellState extends State<AppShell> {
                   label: S.of(context).Settings,
                   selected: _selectedIndex == 2,
                   onTap: () => _onNavTap(2),
-                  badge: GetIt.I<SettingsManager>().hasUpdate,
                 ),
                 const SizedBox(height: 4),
                 _SidebarBtn(
@@ -189,14 +190,21 @@ class _AppShellState extends State<AppShell> {
                           onDoubleTap: () => WindowService.maximize(),
                         ),
                       ),
-                      const Center(
+                      Center(
                         child: Row(
                           children: [
-                            SizedBox(width: 16),
-                            AnimatedCodaTitle(),
-                            Spacer(),
-                            _MacOSTrafficLights(),
-                            SizedBox(width: 16),
+                            const SizedBox(width: 16),
+                            const AnimatedCodaTitle(),
+                            const Spacer(),
+                            if (GetIt.I<SettingsManager>().hasUpdate) ...[
+                              _HeaderUpdateButton(
+                                onTap: () =>
+                                    UpdateService.downloadUpdate(),
+                              ),
+                              const SizedBox(width: 32),
+                            ],
+                            const _MacOSTrafficLights(),
+                            const SizedBox(width: 16),
                           ],
                         ),
                       ),
@@ -242,13 +250,37 @@ class _AppShellState extends State<AppShell> {
                             right: 12,
                             child: SquareMiniPlayer(),
                           ),
-                      ],
+],
                     ),
                   ),
                 ),
               ],
             ),
           ),
+              ],
+            ),
+          ValueListenableBuilder<Widget?>(
+              valueListenable: UpdateService.modalHost,
+              builder: (context, modal, child) {
+                if (modal == null) return const SizedBox.shrink();
+                return Positioned.fill(
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {},
+                          child: const ColoredBox(
+                            color: Color(0x66000000),
+                          ),
+                        ),
+                      ),
+                      Center(child: modal),
+                    ],
+                  ),
+                );
+              },
+            ),
         ],
       ),
     );
@@ -261,14 +293,12 @@ class _SidebarBtn extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  final bool badge;
 
   const _SidebarBtn({
     required this.icon,
     required this.label,
     required this.selected,
     required this.onTap,
-    this.badge = false,
   });
 
   @override
@@ -277,38 +307,72 @@ class _SidebarBtn extends StatelessWidget {
       message: label,
       child: GestureDetector(
         onTap: onTap,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: selected ? Colors.white.withValues(alpha: 0.1) : Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                icon,
-                size: 20,
-                color: selected
-                    ? Colors.white
-                    : Colors.white.withValues(alpha: 0.4),
-              ),
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: selected ? Colors.white.withValues(alpha: 0.1) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(
+            icon,
+            size: 20,
+            color: selected
+                ? Colors.white
+                : Colors.white.withValues(alpha: 0.4),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderUpdateButton extends StatefulWidget {
+  final VoidCallback onTap;
+
+  const _HeaderUpdateButton({required this.onTap});
+
+  @override
+  State<_HeaderUpdateButton> createState() => _HeaderUpdateButtonState();
+}
+
+class _HeaderUpdateButtonState extends State<_HeaderUpdateButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    const greenFg = Color(0xFF86EFAC);
+    const pinkFg = Color(0xFFF9A8D4);
+    final fg = _hovered ? pinkFg : greenFg;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          height: 22,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(3),
+            border: Border.all(
+              color: fg,
+              width: 1.2,
             ),
-            if (badge)
-              Positioned(
-                top: 4,
-                right: 4,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Colors.redAccent,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-          ],
+          ),
+          child: AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: fg,
+            ),
+            child: const Text('UPDATE'),
+          ),
         ),
       ),
     );

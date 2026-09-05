@@ -2,9 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:Coda/services/settings_manager.dart';
 import 'package:Coda/services/update_service/models/update_info.dart';
 import 'package:Coda/services/update_service/widgets/update_checking.dart';
 import 'package:Coda/services/update_service/widgets/update_dialog.dart';
+import 'package:Coda/services/update_service/widgets/update_download_dialog.dart';
+import 'package:get_it/get_it.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:pub_semver/pub_semver.dart';
@@ -13,6 +16,16 @@ import 'package:Coda/services/bottom_message.dart';
 class UpdateService {
   static const String owner = '0xnish';
   static const String repo = 'coda-music';
+
+  static final ValueNotifier<Widget?> modalHost = ValueNotifier<Widget?>(null);
+
+  static void showUpdateModal(Widget Function() builder) {
+    modalHost.value = builder();
+  }
+
+  static void closeUpdateModal() {
+    modalHost.value = null;
+  }
 
   static Future<UpdateInfo?> checkForUpdate() async {
     try {
@@ -139,6 +152,125 @@ class UpdateService {
     if (update == null || !context.mounted) return;
 
     await showUpdateDialog(context, update);
+  }
+
+  static void downloadUpdate() {
+    showUpdateModal(
+      () => UpdateDownloadDialog(onClosed: closeUpdateModal),
+    );
+  }
+
+  static Future<void> checkFromSettings(BuildContext context) async {
+    showUpdateModal(() => const UpdateCheckingDialog());
+
+    final update = await checkForUpdate();
+
+    if (!context.mounted) return;
+
+    if (update == null) {
+      closeUpdateModal();
+      GetIt.I<SettingsManager>().hasUpdate = false;
+      BottomMessage.showText(context, 'You are already on the latest version');
+      return;
+    }
+
+    GetIt.I<SettingsManager>().hasUpdate = true;
+
+    showUpdateModal(
+      () => AlertDialog(
+        backgroundColor: const Color(0xFFF7F9FF),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+        content: SizedBox(
+          width: 300,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDDE6FF),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.system_update,
+                      color: Color(0xFF4A6CF7),
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Update available',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1A1A2E),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Version ${update.version}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF3A3A5C),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'A new version of Coda Music is ready to download.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF3A3A5C),
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+        actions: [
+          TextButton(
+            onPressed: closeUpdateModal,
+            child: const Text(
+              'Not now',
+              style: TextStyle(
+                color: Color(0xFF3A3A5C),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF4A6CF7),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () {
+              closeUpdateModal();
+              downloadUpdate();
+            },
+            child: const Text('Update'),
+          ),
+        ],
+      ),
+    );
   }
 
   static Future<void> manualCheck(BuildContext context) async {
