@@ -156,8 +156,6 @@ class ChartsService {
   }
 }
 
-/// Runs chart preview fetching in a background isolate so the UI thread is not
-/// blocked by network I/O and HTML parsing. Returns plain sendable data.
 Future<List<Map<String, String?>>> fetchChartsForPreview() {
   return Isolate.run(_fetchChartsWorker);
 }
@@ -184,9 +182,7 @@ Future<List<Map<String, String?>>> _fetchChartsWorker() async {
         'url': entry.url,
         'coverArt': coverArt,
       });
-    } catch (_) {
-      // skip charts that fail to load
-    }
+    } catch (_) {}
   }
   return result;
 }
