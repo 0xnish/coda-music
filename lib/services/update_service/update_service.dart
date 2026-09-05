@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:Coda/services/update_service/models/update_info.dart';
@@ -45,12 +46,13 @@ class UpdateService {
       }
 
       if (remoteVersion > currentVersion) {
+        final downloadUrl = await _resolveInstallerUrl();
         return UpdateInfo(
           version: remoteVersion,
           name: 'New Update Available',
           body: 'A new version of Coda Music is available.',
           publishedAt: '',
-          downloadUrl: 'https://github.com/0xnish/coda-music/releases/latest',
+          downloadUrl: downloadUrl,
         );
       }
       
@@ -58,6 +60,78 @@ class UpdateService {
     } catch (e) {
       return null;
     }
+  }
+
+  static Future<String> _resolveInstallerUrl() async {
+    final client = http.Client();
+    try {
+      final response = await client
+          .get(
+            Uri.parse(
+              'https://api.github.com/repos/$owner/$repo/releases/latest',
+            ),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode != 200) return defaultDownloadUrl;
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final assets = data['assets'] as List<dynamic>? ?? [];
+      for (final asset in assets) {
+        final name = (asset['name'] as String? ?? '').toLowerCase();
+        if (name.endsWith('setup.exe')) {
+          final url = asset['browser_download_url'] as String?;
+          if (url != null && url.isNotEmpty) return url;
+        }
+      }
+      return defaultDownloadUrl;
+    } catch (_) {
+      return defaultDownloadUrl;
+    } finally {
+      client.close();
+    }
+  }
+
+  static String get defaultDownloadUrl =>
+      'https://github.com/$owner/$repo/releases/latest';
+
+  static Future<File?> downloadInstaller({
+    required String url,
+    required void Function(int received, int? total) onProgress,
+    bool Function()? stopRequested,
+  }) async {
+    final client = http.Client();
+    try {
+      final request = http.Request('GET', Uri.parse(url));
+      final streamed = await client.send(request);
+      if (streamed.statusCode != 200) return null;
+      final total = streamed.contentLength;
+      final file = File(
+        '${Directory.systemTemp.path}${Platform.pathSeparator}coda-music-update-setup.exe',
+      );
+      final sink = file.openSync(mode: FileMode.write);
+      var received = 0;
+      await for (final chunk in streamed.stream) {
+        if (stopRequested?.call() ?? false) {
+          sink.closeSync();
+          return null;
+        }
+        sink.writeFromSync(chunk);
+        received += chunk.length;
+        onProgress(received, total);
+      }
+      sink.closeSync();
+      return file;
+    } catch (_) {
+      return null;
+    } finally {
+      client.close();
+    }
+  }
+
+  static Future<void> installAndExit(File installer) async {
+    try {
+      await Process.start(installer.path, const []);
+    } catch (_) {}
+    exit(0);
   }
 
   static Future<void> autoCheck(BuildContext context) async {
